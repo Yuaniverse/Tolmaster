@@ -67,7 +67,11 @@ const cpu = usl !== undefined ? (usl - mean) / (3 * stdDev) : Infinity;
 const cpl = lsl !== undefined ? (mean - lsl) / (3 * stdDev) : Infinity;
 const cpk = Math.min(cpu, cpl);
 ```
-
+**我的決定：**
+改成拆分單側不良率：
+1. 從模擬樣本中，分別算出低於 LSL 的單側不良率，以及高於 USL 的單側不良率。
+2. 針對這兩個單側不良率，分別使用單尾常態分佈反推，取得兩個獨立的 Z值。
+3. 取較小的 Z值除以 3。
 ---
 
 ### HIGH — DualPairAnalysis Equivalent Cpk 使用雙側公式於單側問題
@@ -96,6 +100,9 @@ equivCpk = z / 3;
 const z = normSInv(1 - pFailDecimal);  // 單側
 equivCpk = z / 3;
 ```
+
+**我的決定：**
+同意修正
 
 ---
 
@@ -129,28 +136,8 @@ const b_cdf = normSDist((p.max - currentMean) / p.sigma);
 const u = a_cdf + Math.random() * (b_cdf - a_cdf);
 itemVal = currentMean + p.sigma * normSInv(u);
 ```
-
----
-
-### MEDIUM — 不對稱公差下的 Sigma 計算假設
-
-**位置：** `TolMaster.tsx:163-177`
-
-**現行公式：** `sigma = (tolPlus + tolMinus) / 6`
-
-**問題：** 當 tolPlus ≠ tolMinus 時：
-- 假設 6σ = (tolPlus + tolMinus)，亦即 ±3σ 覆蓋整個公差範圍
-- 但 `calculateEffectiveMean()` 會將 mean 偏移到公差中心
-- 結果是一個偏移的對稱常態分布，其 ±3σ 邊界可能與原始公差上/下限不完全吻合
-
-**範例：**
-- tolPlus=2, tolMinus=1, nominal=10
-- effectiveMean = 10 + (2-1)/2 = 10.5
-- sigma = (2+1)/6 = 0.5
-- 3σ 上限 = 10.5 + 1.5 = 12.0，但實際上限 = 10 + 2 = 12.0 ✓
-- 3σ 下限 = 10.5 - 1.5 = 9.0，但實際下限 = 10 - 1 = 9.0 ✓
-
-**結論：** 經過驗證，**此做法在數學上其實是正確的**。effectiveMean 的偏移與 sigma 的計算搭配起來，使得 mean ± 3σ 恰好等於 nominal ± tol。**這是業界標準做法，無需修改。**
+**我的決定：**
+同意修正
 
 ---
 
@@ -163,6 +150,9 @@ itemVal = currentMean + p.sigma * normSInv(u);
 **影響：** 實際影響極小。在邊界值附近的 p-value 差異通常 < 0.01，不會影響常態性判斷的結論。
 
 **建議：** 可選擇性加入平滑處理，但非必要修改。
+
+**我的決定：**
+不做修改
 
 ---
 
@@ -179,6 +169,9 @@ itemVal = currentMean + p.sigma * normSInv(u);
 
 **建議：** 可作為進階選項，對精度敏感的場景改用 Float64Array。
 
+**我的決定：**
+不做修改
+
 ---
 
 ### LOW — Box-Muller 只使用一半輸出
@@ -191,6 +184,9 @@ itemVal = currentMean + p.sigma * normSInv(u);
 
 **建議：** 可選擇性實作快取機制，將 sin 分量存起來供下次呼叫使用。
 
+**我的決定：**
+同意修改
+
 ---
 
 ### LOW — isSymmetric 欄位未使用
@@ -201,20 +197,6 @@ itemVal = currentMean + p.sigma * normSInv(u);
 
 **影響：** 功能殘留，不影響計算正確性。
 
----
+**我的決定：**
+用不到就清掉
 
-## 修復優先順序建議
-
-| 優先順序 | 項目 | 影響 | 預估工作量 |
-|----------|------|------|-----------|
-| 1 | Cpk 計算新增 min(Cpu,Cpl) | 使用者看到的 Cpk 值可能不正確 | 小 |
-| 2 | DualPair Cpk 修正為單側 | 等效 Cpk 被高估 | 極小 |
-| 3 | Normal(Sort) 改用 Inverse CDF | 窄公差下分布形狀扭曲 | 小 |
-| 4 | Float32 → Float64 選項 | 極端尺寸精度 | 中 |
-| 5 | Box-Muller 配對生成 | 效能優化 | 小 |
-
----
-
-## 整體評價
-
-**TolMaster 的核心數學引擎品質很高**，主要的隨機數生成、分布取樣、統計計算均正確實作。發現的 2 個 HIGH 問題（Cpk 計算）屬於統計解讀層面的問題，不影響 Monte Carlo 模擬本身的正確性。模擬引擎產出的 samples、mean、stdDev、yield rate、PPM 數據均為正確。
