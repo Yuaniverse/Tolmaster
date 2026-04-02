@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python .shared/ui-ux-pro-max/scripts/search.py \"engineering SaaS dashboard data-heavy professional desktop tool\" --design-system -p \"TolMaster\" -f markdown)",
+      "Bash(python .shared/ui-ux-pro-max/scripts/search.py \"engineering SaaS dashboard professional B2B\" --domain product)",
+      "Bash(node_modules/.bin/next dev:*)",
+      "Bash(cmd.exe /c \"where npm\" 2>&1)",
+      "Bash(npm --version)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(taskkill:*)",
+      "Bash(netstat -ano)",
+      "Bash(curl:*)"
+    ]
+  }
+}
