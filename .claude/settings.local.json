@@ -12,7 +12,8 @@
       "Bash(taskkill:*)",
       "Bash(netstat -ano)",
       "Bash(curl:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(node:*)"
     ]
   }
 }
