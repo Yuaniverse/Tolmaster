@@ -11,7 +11,8 @@
       "Bash(npm uninstall:*)",
       "Bash(taskkill:*)",
       "Bash(netstat -ano)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

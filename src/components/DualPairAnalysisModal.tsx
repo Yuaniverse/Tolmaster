@@ -45,12 +45,19 @@ interface DualPairAnalysisModalProps {
 }
 
 // --- Helper Functions ---
+let _normalSpare: number | null = null;
 const randomNormal = (mean: number, stdDev: number) => {
+    if (_normalSpare !== null) {
+        const val = mean + _normalSpare * stdDev;
+        _normalSpare = null;
+        return val;
+    }
     let u = 0, v = 0;
     while (u === 0) u = Math.random();
     while (v === 0) v = Math.random();
-    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-    return mean + z * stdDev;
+    const mag = Math.sqrt(-2.0 * Math.log(u));
+    _normalSpare = mag * Math.sin(2.0 * Math.PI * v);
+    return mean + mag * Math.cos(2.0 * Math.PI * v) * stdDev;
 };
 
 const cpkToSigma = (tolerance: number, cpk: number): number => {
@@ -601,8 +608,8 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                     // Calculate Equiv CPK from pFailure
                                     const pFailDecimal = mcResult.pFailure / 100; // Convert % to decimal
                                     let equivCpk = 0;
-                                    if (pFailDecimal < 0.5) {
-                                        const z = normSInv(1 - pFailDecimal / 2);
+                                    if (pFailDecimal < 1) {
+                                        const z = normSInv(1 - pFailDecimal);
                                         equivCpk = z / 3;
                                     }
 

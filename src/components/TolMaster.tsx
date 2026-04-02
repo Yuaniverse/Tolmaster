@@ -127,12 +127,19 @@ const formatNumber = (num: number, digits: number) => {
   return parseFloat(s) === 0 ? Math.abs(parseFloat(s)).toFixed(digits) : s;
 };
 
+let _normalSpare: number | null = null;
 const randomNormal = (mean: number, stdDev: number) => {
+  if (_normalSpare !== null) {
+    const val = mean + _normalSpare * stdDev;
+    _normalSpare = null;
+    return val;
+  }
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
   while (v === 0) v = Math.random();
-  const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-  return mean + z * stdDev;
+  const mag = Math.sqrt(-2.0 * Math.log(u));
+  _normalSpare = mag * Math.sin(2.0 * Math.PI * v);
+  return mean + mag * Math.cos(2.0 * Math.PI * v) * stdDev;
 };
 
 const randomBeta05 = () => {
@@ -480,10 +487,7 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
                       setLocalTolPlus(e.target.value);
                       const val = parseFloat(e.target.value);
                       if (!isNaN(val)) {
-                        // Sync both plus and minus
                         handleUpdateItem(item.id, 'tolPlus', val);
-                        // Note: tolMinus will be auto-synced by parent logic if isSymmetric is true, or we call it explicitly here?
-                        // The existing handleUpdateItem for tolPlus handles tolMinus sync if isSymmetric.
                       }
                     }}
                     onBlur={() => setLocalTolPlus(item.tolPlus.toString())}
@@ -921,48 +925,46 @@ export default function TolMaster() {
       count
     }));
 
-    // Yield / PPM / Cpk
+    // Yield / PPM / Equiv Cpk
     let passCount = 0;
+    let failLow = 0;
+    let failHigh = 0;
     const usl = project.specUpper;
     const lsl = project.specLower;
 
-    // If no specs defined, we can't calculate yield/cpk properly, default to 100% / 0 PPM / 0 Cpk or similar
-    // But usually we want to show distribution at least.
-    // Let's count passes if specs exist.
     if (usl !== undefined || lsl !== undefined) {
       for (let i = 0; i < N; i++) {
         const val = samples[i];
-        let isPass = true;
-        if (usl !== undefined && val > usl) isPass = false;
-        if (lsl !== undefined && val < lsl) isPass = false;
-        if (isPass) passCount++;
+        let failed = false;
+        if (usl !== undefined && val > usl) { failHigh++; failed = true; }
+        if (lsl !== undefined && val < lsl) { failLow++; failed = true; }
+        if (!failed) passCount++;
       }
     } else {
-      passCount = N; // If no specs, everything "passes" technically, or we treat as N/A
+      passCount = N;
     }
 
     const yieldRate = (passCount / N) * 100;
     const defects = N - passCount;
     const ppm = (defects / N) * 1000000;
 
-    // CP (Yield-based / Equivalent)
-    // CP = normSInv(Yield) / 3
-    // If yield is 100%, theoretically CP is infinity. We cap it or handle it.
-    // If yield is 0%, CP is -infinity.
+    // Equiv Cpk: split single-sided defect rates
+    // For each spec limit, compute Z = normSInv(1 - pFail_one_side), Cpk_i = Z / 3
+    // Take the minimum (worst side). Cap at ±5.
     let cp = 0;
-    if (yieldRate >= 100) {
-      cp = 5.0; // Cap at 5.0 as requested
-    } else if (yieldRate <= 0) {
-      cp = 0;
+    if (usl === undefined && lsl === undefined) {
+      cp = 5.0;
     } else {
-      // Acklam's inverse normal is for cumulative probability p.
-      // Yield is the area within specs.
-      // Equivalent Z-score (one-sided) for this yield:
-      // We want Z such that P(-Z < x < Z) = Yield.
-      // P(x < Z) = Yield + (1 - Yield)/2 = (1 + Yield)/2
-      const p = (1 + (yieldRate / 100)) / 2;
-      const z = normSInv(p);
-      cp = Math.min(5.0, z / 3); // Cap calculated CP at 5.0
+      const cpComponents: number[] = [];
+      if (lsl !== undefined) {
+        const pLow = failLow / N;
+        cpComponents.push(pLow <= 0 ? 5.0 : normSInv(1 - pLow) / 3);
+      }
+      if (usl !== undefined) {
+        const pHigh = failHigh / N;
+        cpComponents.push(pHigh <= 0 ? 5.0 : normSInv(1 - pHigh) / 3);
+      }
+      cp = Math.min(5.0, Math.min(...cpComponents));
     }
 
     // Compression Mode Gap Stats (if applicable)
@@ -1138,13 +1140,10 @@ export default function TolMaster() {
               currentMean = p.nominalMean + (connectionDir * driftMag);
             }
 
-            let attempts = 0;
-            do {
-              itemVal = randomNormal(currentMean, p.sigma);
-              attempts++;
-            } while ((itemVal < p.min || itemVal > p.max) && attempts < 100);
-            if (itemVal < p.min) itemVal = p.min;
-            if (itemVal > p.max) itemVal = p.max;
+            const aCdf = normSDist((p.min - currentMean) / p.sigma);
+            const bCdf = normSDist((p.max - currentMean) / p.sigma);
+            const u = aCdf + Math.random() * (bCdf - aCdf);
+            itemVal = currentMean + p.sigma * normSInv(u);
           } else if (p.dist === 'Uniform') {
             itemVal = Math.random() * (p.max - p.min) + p.min;
           } else if (p.dist === 'Empirical' && p.empiricalModel) {
