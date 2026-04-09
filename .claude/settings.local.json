@@ -13,7 +13,10 @@
       "Bash(netstat -ano)",
       "Bash(curl:*)",
       "Bash(npx vite:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebSearch",
+      "WebFetch(domain:community.3dcs.com)",
+      "WebFetch(domain:www.enventive.com)"
     ]
   }
 }

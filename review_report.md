@@ -200,3 +200,6 @@ itemVal = currentMean + p.sigma * normSInv(u);
 **我的決定：**
 用不到就清掉
 
+----------
+
+V2.6已實作完成

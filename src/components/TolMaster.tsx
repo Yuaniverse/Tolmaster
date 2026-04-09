@@ -583,7 +583,7 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
                 <div className="flex items-center">
                   <div className="h-6 w-px bg-slate-200 mx-2"></div>
                   <div className="flex items-center cursor-pointer" onClick={() => handleUpdateItem(item.id, 'enableDynamicMeanShift', !item.enableDynamicMeanShift)}>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mr-2 select-none" title="啟用後，模擬製程平均值會發生 ±1.5σ 的動態漂移，模擬長期生產變異。">Mean Drift</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mr-2 select-none" title="啟用後，模擬製程均值在 ±1.5σ 範圍內隨機漂移（均勻分佈），反映長期生產變異對良率的影響。">Mean Drift</span>
                     <div className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${item.enableDynamicMeanShift ? 'bg-blue-600' : 'bg-slate-200'}`}>
                       <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${item.enableDynamicMeanShift ? 'translate-x-4' : 'translate-x-0'}`} />
                     </div>
@@ -1122,11 +1122,9 @@ export default function TolMaster() {
 
             // Dynamic Mean Drift Logic
             if (p.enableMeanDrift) {
-              // Drift Magnitude = 1.5 * sigma
+              // Drift Magnitude = 1.5 * sigma, uniformly distributed in [-1.5σ, +1.5σ]
               const driftMag = 1.5 * p.sigma;
-              // Random Direction: 50% Left, 50% Right
-              const connectionDir = Math.random() < 0.5 ? -1 : 1;
-              currentMean = p.nominalMean + (connectionDir * driftMag);
+              currentMean = p.nominalMean + (Math.random() * 2 - 1) * driftMag;
             }
 
             itemVal = randomNormal(currentMean, p.sigma);
@@ -1136,8 +1134,7 @@ export default function TolMaster() {
             // Dynamic Mean Drift Logic (Same as Normal)
             if (p.enableMeanDrift) {
               const driftMag = 1.5 * p.sigma;
-              const connectionDir = Math.random() < 0.5 ? -1 : 1;
-              currentMean = p.nominalMean + (connectionDir * driftMag);
+              currentMean = p.nominalMean + (Math.random() * 2 - 1) * driftMag;
             }
 
             const aCdf = normSDist((p.min - currentMean) / p.sigma);
@@ -1157,8 +1154,7 @@ export default function TolMaster() {
             // Dynamic Mean Drift (same logic as Normal)
             if (p.enableMeanDrift) {
               const driftMag = 1.5 * p.empiricalModel.std;
-              const driftDir = Math.random() < 0.5 ? -1 : 1;
-              itemVal += driftDir * driftMag;
+              itemVal += (Math.random() * 2 - 1) * driftMag;
             }
           } else {
             itemVal = p.val;
