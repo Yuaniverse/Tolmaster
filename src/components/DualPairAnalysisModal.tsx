@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import {
-    CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
-} from 'recharts';
 import { X, Play, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 
 // --- Types ---
@@ -263,28 +260,30 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(20%_0.01_240_/_0.52)] p-4 backdrop-blur-sm">
+            <div className="hairline-card flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[10px]">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface-subtle)] p-4">
                     <div>
-                        <h2 className="text-lg font-bold text-slate-800">Dual-Pair Shared Clearance Analysis</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">評估兩組孔-軸配合對共同吸收節距誤差的可行性</p>
+                        <div className="mono-label text-[var(--ink-3)]">Dual-pair interference solver</div>
+                        <h2 className="mt-1 text-[15px] font-semibold text-[var(--ink-1)]">Dual-Pair Shared Clearance Analysis</h2>
+                        <p className="mt-1 text-[12px] text-[var(--ink-2)]">Evaluate whether two hole-shaft fits can absorb pitch mismatch together.</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 hover:bg-slate-200 rounded transition-colors"
+                        className="sunken inline-flex h-8 w-8 items-center justify-center text-[var(--ink-2)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
                     >
-                        <X className="w-5 h-5 text-slate-500" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
 
                 {/* Content - Scrollable */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--canvas)] p-4">
 
                     {/* Formula Reference */}
-                    <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
-                        <strong>Core Formula:</strong> Margin = (C1 + C2) / 2 − ΔP &nbsp;|&nbsp;
+                    <div className="rounded-[10px] border border-[var(--accent-line)] bg-[var(--accent-soft)] p-3 text-[12px] text-[var(--ink-2)]">
+                        <span className="mono-label mr-2 text-[var(--accent)]">Core formula</span>
+                        Margin = (C1 + C2) / 2 − ΔP &nbsp;|&nbsp;
                         C = Hole − Shaft (diameter clearance) &nbsp;|&nbsp;
                         ΔP = |PA − PB| (pitch mismatch)
                     </div>
@@ -293,27 +292,27 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
                         {/* Pair 1 */}
-                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                            <h3 className="font-semibold text-slate-700 mb-3 text-sm border-b pb-2">Hole–Shaft Pair #1</h3>
+                        <div className="hairline-card p-3">
+                            <h3 className="border-b border-[var(--line)] pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Hole-Shaft Pair #1</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
-                                    <span className="text-slate-500 self-center font-medium">Hole1</span>
+                                    <span className="mono-label self-center text-[var(--ink-3)]">Hole1</span>
                                     <div>
-                                        <label className="text-slate-400 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole1Mean}
                                             onChange={(e) => updateInput('hole1Mean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-slate-400 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole1Tol}
                                             onChange={(e) => updateInput('hole1Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -322,11 +321,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-slate-400 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border rounded px-2 py-1 text-sm bg-blue-50"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole1CP}
                                             onChange={(e) => updateInput('hole1CP', parseFloat(e.target.value) || 1)}
                                         />
@@ -335,23 +334,23 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-                                    <span className="text-slate-500 self-center font-medium">Shaft1</span>
+                                    <span className="mono-label self-center text-[var(--ink-3)]">Shaft1</span>
                                     <div>
-                                        <label className="text-slate-400 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft1Mean}
                                             onChange={(e) => updateInput('shaft1Mean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-slate-400 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft1Tol}
                                             onChange={(e) => updateInput('shaft1Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -360,11 +359,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-slate-400 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border rounded px-2 py-1 text-sm bg-blue-50"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft1CP}
                                             onChange={(e) => updateInput('shaft1CP', parseFloat(e.target.value) || 1)}
                                         />
@@ -375,27 +374,27 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         </div>
 
                         {/* Pair 2 */}
-                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                            <h3 className="font-semibold text-slate-700 mb-3 text-sm border-b pb-2">Hole–Shaft Pair #2</h3>
+                        <div className="hairline-card p-3">
+                            <h3 className="border-b border-[var(--line)] pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Hole-Shaft Pair #2</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
-                                    <span className="text-slate-500 self-center font-medium">Hole2</span>
+                                    <span className="mono-label self-center text-[var(--ink-3)]">Hole2</span>
                                     <div>
-                                        <label className="text-slate-400 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole2Mean}
                                             onChange={(e) => updateInput('hole2Mean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-slate-400 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole2Tol}
                                             onChange={(e) => updateInput('hole2Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -404,11 +403,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-slate-400 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border rounded px-2 py-1 text-sm bg-blue-50"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole2CP}
                                             onChange={(e) => updateInput('hole2CP', parseFloat(e.target.value) || 1)}
                                         />
@@ -417,23 +416,23 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-                                    <span className="text-slate-500 self-center font-medium">Shaft2</span>
+                                    <span className="mono-label self-center text-[var(--ink-3)]">Shaft2</span>
                                     <div>
-                                        <label className="text-slate-400 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft2Mean}
                                             onChange={(e) => updateInput('shaft2Mean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-slate-400 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft2Tol}
                                             onChange={(e) => updateInput('shaft2Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -442,11 +441,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-slate-400 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border rounded px-2 py-1 text-sm bg-blue-50"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft2CP}
                                             onChange={(e) => updateInput('shaft2CP', parseFloat(e.target.value) || 1)}
                                         />
@@ -457,27 +456,27 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         </div>
 
                         {/* Pitch */}
-                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
-                            <h3 className="font-semibold text-amber-800 mb-3 text-sm border-b border-amber-200 pb-2">Pitch (節距)</h3>
+                        <div className="rounded-[10px] border border-[var(--warning)]/35 bg-[var(--warning-soft)] p-3">
+                            <h3 className="border-b border-[var(--warning)]/25 pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Pitch Pair</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
-                                    <span className="text-amber-700 self-center font-medium">PA</span>
+                                    <span className="mono-label self-center text-[var(--ink-2)]">PA</span>
                                     <div>
-                                        <label className="text-amber-600 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.paMean}
                                             onChange={(e) => updateInput('paMean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-amber-600 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.paTol}
                                             onChange={(e) => updateInput('paTol', parseFloat(e.target.value) || 0)}
                                         />
@@ -486,11 +485,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-amber-600 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm bg-amber-100"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.paCP}
                                             onChange={(e) => updateInput('paCP', parseFloat(e.target.value) || 1)}
                                         />
@@ -499,23 +498,23 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-                                    <span className="text-amber-700 self-center font-medium">PB</span>
+                                    <span className="mono-label self-center text-[var(--ink-2)]">PB</span>
                                     <div>
-                                        <label className="text-amber-600 block">Mean</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Mean</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.pbMean}
                                             onChange={(e) => updateInput('pbMean', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-amber-600 block">Tol (±)</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Tol ±</label>
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.pbTol}
                                             onChange={(e) => updateInput('pbTol', parseFloat(e.target.value) || 0)}
                                         />
@@ -524,11 +523,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <span></span>
                                     <div>
-                                        <label className="text-amber-600 block">CP</label>
+                                        <label className="mono-label block text-[var(--ink-3)]">Cp</label>
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="w-full border border-amber-300 rounded px-2 py-1 text-sm bg-amber-100"
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.pbCP}
                                             onChange={(e) => updateInput('pbCP', parseFloat(e.target.value) || 1)}
                                         />
@@ -540,40 +539,40 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     </div>
 
                     {/* Worst Case Results */}
-                    <div className="bg-slate-100 rounded-lg p-3 border border-slate-300">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <Info className="w-4 h-4" />
+                    <div className="hairline-card p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                            <h3 className="flex items-center gap-2 text-[13px] font-semibold text-[var(--ink-1)]">
+                                <Info className="h-4 w-4 text-[var(--ink-3)]" />
                                 Worst Case Analysis (即時)
                             </h3>
                             {wcResult.isFeasible ? (
-                                <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium bg-emerald-100 px-2 py-0.5 rounded">
+                                <span className="mono-label flex items-center gap-1 rounded-[999px] bg-[var(--success-soft)] px-2 py-1 text-[var(--success)]">
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Feasible
                                 </span>
                             ) : (
-                                <span className="flex items-center gap-1 text-red-600 text-xs font-medium bg-red-100 px-2 py-0.5 rounded">
+                                <span className="mono-label flex items-center gap-1 rounded-[999px] bg-[var(--danger-soft)] px-2 py-1 text-[var(--danger)]">
                                     <AlertTriangle className="w-3.5 h-3.5" /> Interference Risk
                                 </span>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div className="grid grid-cols-2 gap-3 text-[12px] md:grid-cols-4">
                             <div>
-                                <span className="text-slate-500">C1 Range:</span>
-                                <span className="text-slate-800 font-medium ml-1">[{wcResult.c1Min}, {wcResult.c1Max}]</span>
+                                <span className="mono-label text-[var(--ink-3)]">C1 Range</span>
+                                <div className="mt-1 font-ui-mono text-[var(--ink-1)]">[{wcResult.c1Min}, {wcResult.c1Max}]</div>
                             </div>
                             <div>
-                                <span className="text-slate-500">C2 Range:</span>
-                                <span className="text-slate-800 font-medium ml-1">[{wcResult.c2Min}, {wcResult.c2Max}]</span>
+                                <span className="mono-label text-[var(--ink-3)]">C2 Range</span>
+                                <div className="mt-1 font-ui-mono text-[var(--ink-1)]">[{wcResult.c2Min}, {wcResult.c2Max}]</div>
                             </div>
                             <div>
-                                <span className="text-slate-500">ΔP Max:</span>
-                                <span className="text-amber-700 font-medium ml-1">{wcResult.deltaPMax}</span>
+                                <span className="mono-label text-[var(--ink-3)]">ΔP Max</span>
+                                <div className="mt-1 font-ui-mono text-[var(--warning)]">{wcResult.deltaPMax}</div>
                             </div>
                             <div>
-                                <span className="text-slate-500 font-semibold">WC Margin:</span>
-                                <span className={`font-bold ml-1 ${parseFloat(wcResult.wcMargin) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                <span className="mono-label text-[var(--ink-3)]">WC Margin</span>
+                                <div className={`mt-1 font-ui-mono text-[15px] font-semibold ${parseFloat(wcResult.wcMargin) >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                                     {wcResult.wcMargin}
-                                </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -583,11 +582,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         <button
                             onClick={runMonteCarlo}
                             disabled={isRunning}
-                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-6 py-2.5 rounded-lg shadow-md flex items-center gap-2 font-medium transition-all"
+                            className="inline-flex items-center gap-2 rounded-[6px] bg-[var(--accent)] px-6 py-2.5 font-semibold text-[var(--chrome)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
                         >
                             {isRunning ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <div className="h-4 w-4 animate-spin rounded-[6px] border-2 border-[var(--chrome)] border-t-transparent" />
                                     Running (5M iterations)...
                                 </>
                             ) : (
@@ -603,7 +602,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     {mcResult && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             {/* Key Stats */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                 {mcResult && (() => {
                                     // Calculate Equiv CPK from pFailure
                                     const pFailDecimal = mcResult.pFailure / 100; // Convert % to decimal
@@ -616,44 +615,44 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                     // Determine background color based on CPK
                                     let bgColor, borderColor, textColor;
                                     if (equivCpk < 1.0) {
-                                        bgColor = 'bg-red-50';
-                                        borderColor = 'border-red-200';
-                                        textColor = 'text-red-700';
+                                        bgColor = 'bg-[var(--danger-soft)]';
+                                        borderColor = 'border-[var(--danger)]/35';
+                                        textColor = 'text-[var(--danger)]';
                                     } else if (equivCpk < 1.33) {
-                                        bgColor = 'bg-blue-50';
-                                        borderColor = 'border-blue-200';
-                                        textColor = 'text-blue-700';
+                                        bgColor = 'bg-[var(--warning-soft)]';
+                                        borderColor = 'border-[var(--warning)]/35';
+                                        textColor = 'text-[var(--warning)]';
                                     } else {
-                                        bgColor = 'bg-emerald-50';
-                                        borderColor = 'border-emerald-200';
-                                        textColor = 'text-emerald-700';
+                                        bgColor = 'bg-[var(--success-soft)]';
+                                        borderColor = 'border-[var(--success)]/25';
+                                        textColor = 'text-[var(--success)]';
                                     }
 
                                     return (
-                                        <div className={`p-3 rounded border ${bgColor} ${borderColor}`}>
-                                            <div className="text-xs text-slate-500 uppercase font-semibold">P(Margin &lt; 0)</div>
-                                            <div className={`text-2xl font-bold mt-1 ${textColor}`}>
+                                        <div className={`rounded-[10px] border p-3 ${bgColor} ${borderColor}`}>
+                                            <div className="mono-label text-[var(--ink-3)]">P(Margin &lt; 0)</div>
+                                            <div className={`mt-1 font-ui-mono text-[26px] font-semibold ${textColor}`}>
                                                 {mcResult.pFailure.toFixed(4)}%
                                             </div>
-                                            <div className="text-xs text-slate-400 mt-0.5">
+                                            <div className="mt-0.5 font-ui-mono text-[11px] text-[var(--ink-3)]">
                                                 Equiv. Cpk: {equivCpk.toFixed(2)}
                                             </div>
                                         </div>
                                     );
                                 })()}
-                                <div className="p-3 rounded border bg-slate-50 border-slate-200">
-                                    <div className="text-xs text-slate-500 uppercase font-semibold">Mean Margin</div>
-                                    <div className="text-2xl font-bold mt-1 text-slate-700">{mcResult.meanMargin.toFixed(4)}</div>
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
+                                    <div className="mono-label text-[var(--ink-3)]">Mean Margin</div>
+                                    <div className="mt-1 font-ui-mono text-[26px] font-semibold text-[var(--ink-1)]">{mcResult.meanMargin.toFixed(4)}</div>
                                 </div>
-                                <div className="p-3 rounded border bg-slate-50 border-slate-200">
-                                    <div className="text-xs text-slate-500 uppercase font-semibold">Min Margin</div>
-                                    <div className={`text-2xl font-bold mt-1 ${mcResult.minMargin < 0 ? 'text-red-600' : 'text-slate-700'}`}>
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
+                                    <div className="mono-label text-[var(--ink-3)]">Min Margin</div>
+                                    <div className={`mt-1 font-ui-mono text-[26px] font-semibold ${mcResult.minMargin < 0 ? 'text-[var(--danger)]' : 'text-[var(--ink-1)]'}`}>
                                         {mcResult.minMargin.toFixed(4)}
                                     </div>
                                 </div>
-                                <div className="p-3 rounded border bg-slate-50 border-slate-200">
-                                    <div className="text-xs text-slate-500 uppercase font-semibold">Max Margin</div>
-                                    <div className="text-2xl font-bold mt-1 text-slate-700">{mcResult.maxMargin.toFixed(4)}</div>
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
+                                    <div className="mono-label text-[var(--ink-3)]">Max Margin</div>
+                                    <div className="mt-1 font-ui-mono text-[26px] font-semibold text-[var(--ink-1)]">{mcResult.maxMargin.toFixed(4)}</div>
                                 </div>
                             </div>
 
@@ -662,10 +661,10 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                 </div>
 
                 {/* Footer */}
-                <div className="p-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+                <div className="flex justify-end border-t border-[var(--line)] bg-[var(--surface-subtle)] p-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded transition-colors"
+                        className="sunken px-4 py-1.5 text-[12px] font-medium text-[var(--ink-2)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
                     >
                         Close
                     </button>

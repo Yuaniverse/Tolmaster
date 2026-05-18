@@ -1,26 +1,135 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: oklch(98.5% 0.004 80);
+  --surface: oklch(100% 0 0);
+  --surface-subtle: oklch(96.5% 0.005 80);
+  --ink-1: oklch(20% 0.015 240);
+  --ink-2: oklch(40% 0.012 240);
+  --ink-3: oklch(58% 0.01 240);
+  --line: oklch(92% 0.005 80);
+  --line-strong: oklch(78% 0.01 240);
+  --chrome: oklch(20% 0.01 240);
+  --chrome-2: oklch(16% 0.012 240);
+  --accent-hue: 200;
+  --accent: oklch(60% 0.13 var(--accent-hue));
+  --accent-soft: oklch(95% 0.025 var(--accent-hue));
+  --accent-line: oklch(86% 0.06 var(--accent-hue));
+  --success: oklch(62% 0.13 155);
+  --success-soft: oklch(95% 0.035 155);
+  --warning: oklch(72% 0.15 75);
+  --warning-soft: oklch(96% 0.04 75);
+  --danger: oklch(58% 0.18 25);
+  --danger-soft: oklch(95% 0.05 25);
+  --shadow-focus: 0 0 0 3px oklch(60% 0.13 var(--accent-hue) / 0.15);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink-1);
+  --font-sans: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Consolas", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--canvas);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink-1);
+  font-family: "Inter", "Segoe UI", sans-serif;
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: white;
+}
+
+.font-ui-mono {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono-label {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.hairline-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.sunken {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+}
+
+.field-shell {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.field-shell:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-focus);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--success);
+  box-shadow: 0 0 0 3px oklch(62% 0.13 155 / 0.18);
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 0.48;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid var(--canvas);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
