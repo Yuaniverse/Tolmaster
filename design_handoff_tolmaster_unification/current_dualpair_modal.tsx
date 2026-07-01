@@ -1,32 +1,31 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Play, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import DualPairMCWorker from '../workers/dualPairMC.worker.ts?worker&inline';
 
 // --- Types ---
 interface DualPairInputs {
     // Pair 1
     hole1Mean: number;
     hole1Tol: number;
-    hole1Cp: number;
+    hole1CP: number;
     shaft1Mean: number;
     shaft1Tol: number;
-    shaft1Cp: number;
+    shaft1CP: number;
     // Pair 2
     hole2Mean: number;
     hole2Tol: number;
-    hole2Cp: number;
+    hole2CP: number;
     shaft2Mean: number;
     shaft2Tol: number;
-    shaft2Cp: number;
+    shaft2CP: number;
     // Pitch
     paMean: number;
     paTol: number;
-    paCp: number;
+    paCP: number;
     pbMean: number;
     pbTol: number;
-    pbCp: number;
+    pbCP: number;
 }
 
 interface MonteCarloResult {
@@ -34,6 +33,7 @@ interface MonteCarloResult {
     minMargin: number;
     maxMargin: number;
     pFailure: number; // P(Margin < 0)
+    samples: Float32Array;
 }
 
 interface DualPairAnalysisModalProps {
@@ -42,10 +42,25 @@ interface DualPairAnalysisModalProps {
 }
 
 // --- Helper Functions ---
+let _normalSpare: number | null = null;
+const randomNormal = (mean: number, stdDev: number) => {
+    if (_normalSpare !== null) {
+        const val = mean + _normalSpare * stdDev;
+        _normalSpare = null;
+        return val;
+    }
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const mag = Math.sqrt(-2.0 * Math.log(u));
+    _normalSpare = mag * Math.sin(2.0 * Math.PI * v);
+    return mean + mag * Math.cos(2.0 * Math.PI * v) * stdDev;
+};
 
-const cpToSigma = (tolerance: number, cp: number): number => {
-    if (cp <= 0) return tolerance / 3;
-    return tolerance / (3 * cp);
+const cpkToSigma = (tolerance: number, cpk: number): number => {
+    // σ = Tolerance / (3 × Cpk)
+    if (cpk <= 0) return tolerance / 3;
+    return tolerance / (3 * cpk);
 };
 
 // Inverse Standard Normal Distribution (for CPK calculation)
@@ -103,46 +118,66 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
         // Pair 1 defaults
         hole1Mean: 10.0,
         hole1Tol: 0.05,
-        hole1Cp: 1.0,
+        hole1CP: 1.0,
         shaft1Mean: 9.95,
         shaft1Tol: 0.02,
-        shaft1Cp: 1.0,
+        shaft1CP: 1.0,
         // Pair 2 defaults
         hole2Mean: 10.0,
         hole2Tol: 0.05,
-        hole2Cp: 1.0,
+        hole2CP: 1.0,
         shaft2Mean: 9.95,
         shaft2Tol: 0.02,
-        shaft2Cp: 1.0,
+        shaft2CP: 1.0,
         // Pitch defaults
         paMean: 100.0,
         paTol: 0.02,
-        paCp: 1.0,
+        paCP: 1.0,
         pbMean: 100.0,
         pbTol: 0.02,
-        pbCp: 1.0,
+        pbCP: 1.0,
     });
 
     const [mcResult, setMcResult] = useState<MonteCarloResult | null>(null);
     const [isRunning, setIsRunning] = useState(false);
-    const workerRef = useRef<Worker | null>(null);
 
     // --- Worst Case Calculation (Real-time) ---
     const wcResult = useMemo(() => {
-        const c1Min = (inputs.hole1Mean - inputs.hole1Tol) - (inputs.shaft1Mean + inputs.shaft1Tol);
-        const c1Max = (inputs.hole1Mean + inputs.hole1Tol) - (inputs.shaft1Mean - inputs.shaft1Tol);
+        // C1_min = (Hole1_min - Shaft1_max)
+        const hole1Min = inputs.hole1Mean - inputs.hole1Tol;
+        const hole1Max = inputs.hole1Mean + inputs.hole1Tol;
+        const shaft1Min = inputs.shaft1Mean - inputs.shaft1Tol;
+        const shaft1Max = inputs.shaft1Mean + inputs.shaft1Tol;
 
-        const c2Min = (inputs.hole2Mean - inputs.hole2Tol) - (inputs.shaft2Mean + inputs.shaft2Tol);
-        const c2Max = (inputs.hole2Mean + inputs.hole2Tol) - (inputs.shaft2Mean - inputs.shaft2Tol);
+        const c1Min = hole1Min - shaft1Max;
+        const c1Max = hole1Max - shaft1Min;
 
-        // Max |PA − PB| = |μA − μB| + tolA + tolB
-        const deltaPMax = Math.abs(inputs.paMean - inputs.pbMean) + inputs.paTol + inputs.pbTol;
+        // C2
+        const hole2Min = inputs.hole2Mean - inputs.hole2Tol;
+        const hole2Max = inputs.hole2Mean + inputs.hole2Tol;
+        const shaft2Min = inputs.shaft2Mean - inputs.shaft2Tol;
+        const shaft2Max = inputs.shaft2Mean + inputs.shaft2Tol;
 
-        // WC Margin (最保守：間隙最小 + 節距誤差最大)
+        const c2Min = hole2Min - shaft2Max;
+        const c2Max = hole2Max - shaft2Min;
+
+        // ΔP_max: worst case pitch mismatch
+        const paMin = inputs.paMean - inputs.paTol;
+        const paMax = inputs.paMean + inputs.paTol;
+        const pbMin = inputs.pbMean - inputs.pbTol;
+        const pbMax = inputs.pbMean + inputs.pbTol;
+
+        // Maximum possible |PA - PB|
+        const deltaPMax = Math.max(
+            Math.abs(paMax - pbMin),
+            Math.abs(paMin - pbMax)
+        );
+
+        // WC Margin (worst case uses minimum clearances and maximum pitch error)
         const wcMargin = (c1Min + c2Min) / 2 - deltaPMax;
 
-        // 過盈判定
-        const hasInterference = c1Min < 0 || c2Min < 0;
+        // Best case margin
+        const bcMargin = (c1Max + c2Max) / 2 - 0; // Best case: zero pitch mismatch
 
         return {
             c1Min: c1Min.toFixed(4),
@@ -151,39 +186,71 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
             c2Max: c2Max.toFixed(4),
             deltaPMax: deltaPMax.toFixed(4),
             wcMargin: wcMargin.toFixed(4),
-            isFeasible: wcMargin >= 0 && !hasInterference,
-            hasInterference,
+            bcMargin: bcMargin.toFixed(4),
+            isFeasible: wcMargin >= 0
         };
     }, [inputs]);
 
-    // --- Monte Carlo Simulation (Web Worker) ---
+    // --- Monte Carlo Simulation ---
     const runMonteCarlo = () => {
         setIsRunning(true);
-        workerRef.current?.terminate();
 
-        const worker = new DualPairMCWorker();
-        workerRef.current = worker;
+        // Use setTimeout to allow UI to update
+        setTimeout(() => {
+            const N = 5000000;
+            const margins = new Float32Array(N);
 
-        const N = 5_000_000;
-        worker.onmessage = (e: MessageEvent<MonteCarloResult>) => {
-            setMcResult(e.data);
+            const h1Sigma = cpkToSigma(inputs.hole1Tol, inputs.hole1CP);
+            const s1Sigma = cpkToSigma(inputs.shaft1Tol, inputs.shaft1CP);
+            const h2Sigma = cpkToSigma(inputs.hole2Tol, inputs.hole2CP);
+            const s2Sigma = cpkToSigma(inputs.shaft2Tol, inputs.shaft2CP);
+            const paSigma = cpkToSigma(inputs.paTol, inputs.paCP);
+            const pbSigma = cpkToSigma(inputs.pbTol, inputs.pbCP);
+
+            let sum = 0;
+            let min = Infinity;
+            let max = -Infinity;
+            let failCount = 0;
+
+            for (let i = 0; i < N; i++) {
+                // Sample Pair 1
+                const hole1 = randomNormal(inputs.hole1Mean, h1Sigma);
+                const shaft1 = randomNormal(inputs.shaft1Mean, s1Sigma);
+                const c1 = hole1 - shaft1;
+
+                // Sample Pair 2
+                const hole2 = randomNormal(inputs.hole2Mean, h2Sigma);
+                const shaft2 = randomNormal(inputs.shaft2Mean, s2Sigma);
+                const c2 = hole2 - shaft2;
+
+                // Sample Pitch
+                const pa = randomNormal(inputs.paMean, paSigma);
+                const pb = randomNormal(inputs.pbMean, pbSigma);
+                const deltaP = Math.abs(pa - pb);
+
+                // Calculate Margin
+                const margin = (c1 + c2) / 2 - deltaP;
+                margins[i] = margin;
+
+                sum += margin;
+                if (margin < min) min = margin;
+                if (margin > max) max = margin;
+                if (margin < 0) failCount++;
+            }
+
+            const meanMargin = sum / N;
+            const pFailure = (failCount / N) * 100;
+
+            setMcResult({
+                meanMargin,
+                minMargin: min,
+                maxMargin: max,
+                pFailure,
+                samples: margins
+            });
+
             setIsRunning(false);
-            worker.terminate();
-        };
-        worker.onerror = () => {
-            setIsRunning(false);
-            worker.terminate();
-        };
-
-        worker.postMessage({
-            N,
-            hole1Mean: inputs.hole1Mean, h1Sigma: cpToSigma(inputs.hole1Tol, inputs.hole1Cp),
-            shaft1Mean: inputs.shaft1Mean, s1Sigma: cpToSigma(inputs.shaft1Tol, inputs.shaft1Cp),
-            hole2Mean: inputs.hole2Mean, h2Sigma: cpToSigma(inputs.hole2Tol, inputs.hole2Cp),
-            shaft2Mean: inputs.shaft2Mean, s2Sigma: cpToSigma(inputs.shaft2Tol, inputs.shaft2Cp),
-            paMean: inputs.paMean, paSigma: cpToSigma(inputs.paTol, inputs.paCp),
-            pbMean: inputs.pbMean, pbSigma: cpToSigma(inputs.pbTol, inputs.pbCp),
-        });
+        }, 50);
     };
 
     const updateInput = (field: keyof DualPairInputs, value: number) => {
@@ -193,8 +260,8 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-            <div className="card flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(20%_0.01_240_/_0.52)] p-4 backdrop-blur-sm">
+            <div className="hairline-card flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[10px]">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface-subtle)] p-4">
                     <div>
@@ -204,7 +271,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     </div>
                     <button
                         onClick={onClose}
-                        className="iconbtn ghost"
+                        className="sunken inline-flex h-8 w-8 items-center justify-center text-[var(--ink-2)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -214,8 +281,8 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                 <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--canvas)] p-4">
 
                     {/* Formula Reference */}
-                    <div className="card pad text-[12px] text-[var(--ink-2)]">
-                        <span className="label mr-2">Core formula</span>
+                    <div className="rounded-[10px] border border-[var(--accent-line)] bg-[var(--accent-soft)] p-3 text-[12px] text-[var(--ink-2)]">
+                        <span className="mono-label mr-2 text-[var(--accent)]">Core formula</span>
                         Margin = (C1 + C2) / 2 − ΔP &nbsp;|&nbsp;
                         C = Hole − Shaft (diameter clearance) &nbsp;|&nbsp;
                         ΔP = |PA − PB| (pitch mismatch)
@@ -225,7 +292,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
                         {/* Pair 1 */}
-                        <div className="card pad">
+                        <div className="hairline-card p-3">
                             <h3 className="border-b border-[var(--line)] pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Hole-Shaft Pair #1</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
@@ -235,7 +302,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole1Mean}
                                             onChange={(e) => updateInput('hole1Mean', parseFloat(e.target.value) || 0)}
                                         />
@@ -245,7 +312,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole1Tol}
                                             onChange={(e) => updateInput('hole1Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -258,9 +325,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.hole1Cp}
-                                            onChange={(e) => updateInput('hole1Cp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.hole1CP}
+                                            onChange={(e) => updateInput('hole1CP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -273,7 +340,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft1Mean}
                                             onChange={(e) => updateInput('shaft1Mean', parseFloat(e.target.value) || 0)}
                                         />
@@ -283,7 +350,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft1Tol}
                                             onChange={(e) => updateInput('shaft1Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -296,9 +363,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.shaft1Cp}
-                                            onChange={(e) => updateInput('shaft1Cp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.shaft1CP}
+                                            onChange={(e) => updateInput('shaft1CP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -307,7 +374,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         </div>
 
                         {/* Pair 2 */}
-                        <div className="card pad">
+                        <div className="hairline-card p-3">
                             <h3 className="border-b border-[var(--line)] pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Hole-Shaft Pair #2</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
@@ -317,7 +384,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole2Mean}
                                             onChange={(e) => updateInput('hole2Mean', parseFloat(e.target.value) || 0)}
                                         />
@@ -327,7 +394,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.hole2Tol}
                                             onChange={(e) => updateInput('hole2Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -340,9 +407,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.hole2Cp}
-                                            onChange={(e) => updateInput('hole2Cp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.hole2CP}
+                                            onChange={(e) => updateInput('hole2CP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -355,7 +422,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft2Mean}
                                             onChange={(e) => updateInput('shaft2Mean', parseFloat(e.target.value) || 0)}
                                         />
@@ -365,7 +432,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.shaft2Tol}
                                             onChange={(e) => updateInput('shaft2Tol', parseFloat(e.target.value) || 0)}
                                         />
@@ -378,9 +445,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.shaft2Cp}
-                                            onChange={(e) => updateInput('shaft2Cp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.shaft2CP}
+                                            onChange={(e) => updateInput('shaft2CP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -389,7 +456,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         </div>
 
                         {/* Pitch */}
-                        <div className="card pad bg-[var(--warning-soft)] border-[var(--warning-line)]">
+                        <div className="rounded-[10px] border border-[var(--warning)]/35 bg-[var(--warning-soft)] p-3">
                             <h3 className="border-b border-[var(--warning)]/25 pb-2 text-[13px] font-semibold text-[var(--ink-1)]">Pitch Pair</h3>
                             <div className="space-y-2">
                                 <div className="grid grid-cols-3 gap-2 text-xs">
@@ -399,7 +466,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.paMean}
                                             onChange={(e) => updateInput('paMean', parseFloat(e.target.value) || 0)}
                                         />
@@ -409,7 +476,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.paTol}
                                             onChange={(e) => updateInput('paTol', parseFloat(e.target.value) || 0)}
                                         />
@@ -422,9 +489,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.paCp}
-                                            onChange={(e) => updateInput('paCp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.paCP}
+                                            onChange={(e) => updateInput('paCP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -437,7 +504,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.pbMean}
                                             onChange={(e) => updateInput('pbMean', parseFloat(e.target.value) || 0)}
                                         />
@@ -447,7 +514,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.001"
-                                            className="input right w-full"
+                                            className="field-shell font-ui-mono w-full px-2 py-1 text-right text-[12px] outline-none"
                                             value={inputs.pbTol}
                                             onChange={(e) => updateInput('pbTol', parseFloat(e.target.value) || 0)}
                                         />
@@ -460,9 +527,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                         <input
                                             type="number"
                                             step="0.1"
-                                            className="input right w-full"
-                                            value={inputs.pbCp}
-                                            onChange={(e) => updateInput('pbCp', parseFloat(e.target.value) || 1)}
+                                            className="field-shell font-ui-mono w-full bg-[var(--surface-subtle)] px-2 py-1 text-right text-[12px] outline-none"
+                                            value={inputs.pbCP}
+                                            onChange={(e) => updateInput('pbCP', parseFloat(e.target.value) || 1)}
                                         />
                                     </div>
                                     <span></span>
@@ -472,22 +539,19 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                     </div>
 
                     {/* Worst Case Results */}
-                    <div className="card pad">
+                    <div className="hairline-card p-3">
                         <div className="mb-2 flex items-center justify-between">
                             <h3 className="flex items-center gap-2 text-[13px] font-semibold text-[var(--ink-1)]">
+                                <Info className="h-4 w-4 text-[var(--ink-3)]" />
                                 Worst Case Analysis (即時)
                             </h3>
                             {wcResult.isFeasible ? (
-                                <span className="badge badge--success">
+                                <span className="mono-label flex items-center gap-1 rounded-[999px] bg-[var(--success-soft)] px-2 py-1 text-[var(--success)]">
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Feasible
                                 </span>
-                            ) : wcResult.hasInterference ? (
-                                <span className="badge badge--danger">
-                                    <AlertTriangle className="w-3.5 h-3.5" /> Direct Interference
-                                </span>
                             ) : (
-                                <span className="badge badge--danger">
-                                    <AlertTriangle className="w-3.5 h-3.5" /> Pitch Interference
+                                <span className="mono-label flex items-center gap-1 rounded-[999px] bg-[var(--danger-soft)] px-2 py-1 text-[var(--danger)]">
+                                    <AlertTriangle className="w-3.5 h-3.5" /> Interference Risk
                                 </span>
                             )}
                         </div>
@@ -501,25 +565,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="mt-1 font-ui-mono text-[var(--ink-1)]">[{wcResult.c2Min}, {wcResult.c2Max}]</div>
                             </div>
                             <div>
-                                <span className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
-                                    ΔP Max
-                                    <Info className="h-3 w-3 cursor-help opacity-50" />
-                                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-52 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                        最大節距誤差。<br />ΔP = |PA − PB|<br />取 PA、PB 公差範圍所能產生的最大偏差值。
-                                        <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                    </div>
-                                </span>
+                                <span className="mono-label text-[var(--ink-3)]">ΔP Max</span>
                                 <div className="mt-1 font-ui-mono text-[var(--warning)]">{wcResult.deltaPMax}</div>
                             </div>
                             <div>
-                                <span className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
-                                    WC Margin
-                                    <Info className="h-3 w-3 cursor-help opacity-50" />
-                                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-56 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                        最差情況餘隙（即時計算）。<br />WC Margin = (C1min + C2min) / 2 − ΔPmax<br />值 ≥ 0 表示最差情況下無干涉。
-                                        <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                    </div>
-                                </span>
+                                <span className="mono-label text-[var(--ink-3)]">WC Margin</span>
                                 <div className={`mt-1 font-ui-mono text-[15px] font-semibold ${parseFloat(wcResult.wcMargin) >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                                     {wcResult.wcMargin}
                                 </div>
@@ -532,11 +582,11 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                         <button
                             onClick={runMonteCarlo}
                             disabled={isRunning}
-                            className="btn btn--primary disabled:cursor-not-allowed disabled:opacity-45"
+                            className="inline-flex items-center gap-2 rounded-[6px] bg-[var(--accent)] px-6 py-2.5 font-semibold text-[var(--chrome)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
                         >
                             {isRunning ? (
                                 <>
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    <div className="h-4 w-4 animate-spin rounded-[6px] border-2 border-[var(--chrome)] border-t-transparent" />
                                     Running (5M iterations)...
                                 </>
                             ) : (
@@ -555,56 +605,52 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                 {mcResult && (() => {
                                     // Calculate Equiv CPK from pFailure
-                                    const N_MC = 5_000_000;
-                                    const pFailDecimal = mcResult.pFailure / 100;
-                                    const pClamped = Math.max(0.5 / N_MC, Math.min(1 - 0.5 / N_MC, pFailDecimal));
-                                    const z = normSInv(1 - pClamped);
-                                    const equivCpk = z / 3;
+                                    const pFailDecimal = mcResult.pFailure / 100; // Convert % to decimal
+                                    let equivCpk = 0;
+                                    if (pFailDecimal < 1) {
+                                        const z = normSInv(1 - pFailDecimal);
+                                        equivCpk = z / 3;
+                                    }
 
-                                    // Determine status based on CPK
-                                    let stripeClass, textColor;
+                                    // Determine background color based on CPK
+                                    let bgColor, borderColor, textColor;
                                     if (equivCpk < 1.0) {
-                                        stripeClass = 'danger';
+                                        bgColor = 'bg-[var(--danger-soft)]';
+                                        borderColor = 'border-[var(--danger)]/35';
                                         textColor = 'text-[var(--danger)]';
                                     } else if (equivCpk < 1.33) {
-                                        stripeClass = 'warning';
+                                        bgColor = 'bg-[var(--warning-soft)]';
+                                        borderColor = 'border-[var(--warning)]/35';
                                         textColor = 'text-[var(--warning)]';
                                     } else {
-                                        stripeClass = 'success';
+                                        bgColor = 'bg-[var(--success-soft)]';
+                                        borderColor = 'border-[var(--success)]/25';
                                         textColor = 'text-[var(--success)]';
                                     }
 
                                     return (
-                                        <div className="card stat">
-                                            <div className={`stripe ${stripeClass}`} />
-                                            <div className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
-                                                P(Margin &lt; 0)
-                                                <Info className="h-3 w-3 cursor-help opacity-50" />
-                                                <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-60 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                                    干涉機率（Monte Carlo）。<br />模擬中 Margin &lt; 0 的樣本比例，即兩對配合同時發生干涉的概率。<br /><br />Equiv. Cpk 為從此失敗率反推的等效製程能力指數。
-                                                    <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                                </div>
-                                            </div>
+                                        <div className={`rounded-[10px] border p-3 ${bgColor} ${borderColor}`}>
+                                            <div className="mono-label text-[var(--ink-3)]">P(Margin &lt; 0)</div>
                                             <div className={`mt-1 font-ui-mono text-[26px] font-semibold ${textColor}`}>
                                                 {mcResult.pFailure.toFixed(4)}%
                                             </div>
                                             <div className="mt-0.5 font-ui-mono text-[11px] text-[var(--ink-3)]">
-                                                Equiv. Cpk: {equivCpk > 6 ? '>6.00' : equivCpk.toFixed(2)}
+                                                Equiv. Cpk: {equivCpk.toFixed(2)}
                                             </div>
                                         </div>
                                     );
                                 })()}
-                                <div className="card pad">
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
                                     <div className="mono-label text-[var(--ink-3)]">Mean Margin</div>
                                     <div className="mt-1 font-ui-mono text-[26px] font-semibold text-[var(--ink-1)]">{mcResult.meanMargin.toFixed(4)}</div>
                                 </div>
-                                <div className="card pad">
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
                                     <div className="mono-label text-[var(--ink-3)]">Min Margin</div>
                                     <div className={`mt-1 font-ui-mono text-[26px] font-semibold ${mcResult.minMargin < 0 ? 'text-[var(--danger)]' : 'text-[var(--ink-1)]'}`}>
                                         {mcResult.minMargin.toFixed(4)}
                                     </div>
                                 </div>
-                                <div className="card pad">
+                                <div className="rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-3">
                                     <div className="mono-label text-[var(--ink-3)]">Max Margin</div>
                                     <div className="mt-1 font-ui-mono text-[26px] font-semibold text-[var(--ink-1)]">{mcResult.maxMargin.toFixed(4)}</div>
                                 </div>
@@ -618,7 +664,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                 <div className="flex justify-end border-t border-[var(--line)] bg-[var(--surface-subtle)] p-3">
                     <button
                         onClick={onClose}
-                        className="btn btn--secondary"
+                        className="sunken px-4 py-1.5 text-[12px] font-medium text-[var(--ink-2)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
                     >
                         Close
                     </button>

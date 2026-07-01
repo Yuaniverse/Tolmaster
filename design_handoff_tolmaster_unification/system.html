@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>TolMaster — Design System Diff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --canvas: #f4f4f3;
+  --surface: #ffffff;
+  --surface-subtle: #f7f7f6;
+  --chrome: #1a1a1a;
+  --line: #e6e5e2;
+  --line-strong: #d5d4d0;
+  --ink-1: #1a1a1a;
+  --ink-2: #555452;
+  --ink-3: #8a8884;
+  --accent: #2a6fdb;
+  --accent-soft: #eaf1fc;
+  --accent-line: #c6d9f7;
+  --success: #1d8a5a;
+  --success-soft: #e7f3ec;
+  --success-line: #c4e1d0;
+  --warning: #b06a00;
+  --warning-soft: #fbf1de;
+  --warning-line: #ecd6a4;
+  --danger: #b93b3b;
+  --danger-soft: #fae8e8;
+  --danger-line: #ecc6c6;
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+  --sans: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--sans); font-size: 13px; color: var(--ink-1); background: var(--canvas);
+  -webkit-font-smoothing: antialiased; line-height: 1.5;
+}
+.mono { font-family: var(--mono); }
+.label { font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+
+.page { max-width: 1180px; margin: 0 auto; padding: 40px 32px 64px; }
+
+.hero { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 32px; }
+.hero h1 { font-size: 32px; letter-spacing: -0.02em; font-weight: 700; margin-bottom: 8px; }
+.hero h1 b { color: var(--accent); }
+.hero p { font-size: 15px; color: var(--ink-2); max-width: 720px; line-height: 1.55; }
+.hero .meta { display: flex; gap: 24px; margin-top: 18px; }
+.hero .meta div { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
+.hero .meta div b { color: var(--ink-1); font-weight: 600; }
+
+.section { margin-bottom: 48px; }
+.section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
+.section-num { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.1em; }
+.section-title { font-size: 20px; font-weight: 600; letter-spacing: -0.005em; }
+.section-desc { color: var(--ink-2); font-size: 13.5px; margin-left: auto; max-width: 360px; text-align: right; }
+
+/* Diff card: 2-up before / after */
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.diff .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-3); padding: 18px 20px; }
+.diff .col-before { background: var(--surface-subtle); }
+.diff .col-tag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+.diff .col-tag.before { color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger-line); }
+.diff .col-tag.after { color: var(--success); background: var(--success-soft); border: 1px solid var(--success-line); }
+.diff .col h4 { font-size: 14px; font-weight: 600; margin-top: 8px; margin-bottom: 12px; }
+.diff .col .specimen { padding: 14px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.diff .col .notes { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.diff .col .notes li { list-style: none; font-size: 12.5px; color: var(--ink-2); line-height: 1.6; padding-left: 16px; position: relative; margin-bottom: 4px; }
+.diff .col .notes li::before { content: "→"; position: absolute; left: 0; color: var(--ink-3); }
+.diff .col-before .notes li::before { content: "×"; color: var(--danger); }
+.diff .col-after .notes li::before { content: "✓"; color: var(--success); }
+
+/* Tokens table */
+.tokens { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-3); overflow: hidden; }
+.tokens table { width: 100%; border-collapse: collapse; }
+.tokens th { background: var(--surface-subtle); padding: 10px 16px; text-align: left; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--line); }
+.tokens td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tokens tr:last-child td { border-bottom: 0; }
+.tokens td.swatch { width: 36px; }
+.tokens td.swatch .sw { width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--line); }
+.tokens td.token { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-1); }
+.tokens td.val { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+.tokens td.desc { font-size: 13px; color: var(--ink-2); }
+.tokens td.demo { width: 200px; }
+
+/* Replica components for demo */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: var(--r-2); border: 1px solid transparent; font: 500 13px/1 var(--sans); cursor: pointer; }
+.btn--primary { background: var(--accent); color: white; }
+.btn--secondary { background: var(--surface); border-color: var(--line-strong); }
+.btn--ghost { background: transparent; color: var(--ink-2); }
+.iconbtn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+.input { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-2); font: 500 13px/1 var(--mono); }
+.input:focus, .input.is-focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: var(--r-1); border: 1px solid var(--line); background: var(--surface-subtle); font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.badge .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.badge--accent  { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.badge--success { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+.badge--warning { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+.badge--danger  { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+
+/* Stat-card demo */
+.stat-card-demo {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-3);
+  padding: 14px 16px 14px 19px; position: relative; min-width: 200px;
+}
+.stat-card-demo .stripe { position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; }
+.stat-card-demo .stripe.success { background: var(--success); }
+.stat-card-demo .l { font: 500 10.5px/1 var(--mono); color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.stat-card-demo .v { font: 600 22px/1 var(--mono); margin-top: 6px; letter-spacing: -0.02em; }
+
+/* "Before" replicas — the misaligned current versions */
+.old-btn-1 { background: oklch(60% 0.13 250); color: white; padding: 6px 12px; border-radius: 4px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); border: 0; }
+.old-btn-2 { background: oklch(60% 0.13 250); color: white; padding: 8px 16px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); border: 0; }
+.old-btn-3 { background: oklch(60% 0.13 250); color: white; padding: 12px 16px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; border: 0; }
+.old-btn-4 { background: white; border: 1px solid var(--line); color: var(--ink-2); padding: 6px 12px; border-radius: 4px; font-size: 13px; }
+.old-btn-5 { background: white; border: 1px solid var(--line); color: var(--ink-2); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+
+.old-card-yield { background: linear-gradient(180deg, var(--success-soft) 0%, var(--canvas) 70%); border: 1px solid #c4e1d0; padding: 14px 16px; border-radius: var(--r-3); min-width: 180px; }
+.old-card-yield .l { font: 500 10.5px/1 var(--mono); color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.old-card-yield .v { font: 600 22px/1 var(--mono); margin-top: 6px; color: oklch(40% 0.13 155); }
+
+.old-card-cpk { background: var(--success-soft); border: 1px solid rgba(29, 138, 90, 0.25); padding: 14px 16px; border-radius: var(--r-3); min-width: 180px; }
+.old-card-cpk .l { font: 500 10.5px/1 var(--mono); color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.old-card-cpk .v { font: 600 22px/1 var(--mono); margin-top: 6px; color: var(--success); }
+
+.old-card-neutral { background: var(--canvas); border: 1px solid var(--line); padding: 14px 16px; border-radius: var(--r-3); min-width: 180px; }
+.old-card-neutral .l { font: 500 10.5px/1 var(--mono); color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.old-card-neutral .v { font: 600 22px/1 var(--mono); margin-top: 6px; color: var(--ink-2); }
+
+/* radius demo squares */
+.r-demo { display: inline-flex; align-items: center; gap: 12px; }
+.r-square { width: 40px; height: 40px; background: var(--accent-soft); border: 1px solid var(--accent-line); display: grid; place-items: center; font: 500 10px/1 var(--mono); color: var(--accent); }
+
+/* Old badge variants showing inconsistency */
+.old-pill-1 { background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent); padding: 4px 8px; border-radius: 999px; font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.old-pill-2 { background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent); padding: 6px 8px; border-radius: 6px; font: 500 11px/1 var(--mono); letter-spacing: 0.04em; }
+.old-pill-3 { background: white; border: 1px solid var(--line); padding: 4px 8px; border-radius: 4px; font: 500 10px/1 var(--mono); color: var(--ink-2); }
+.old-pill-yellow { background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning); padding: 4px 8px; border-radius: 4px; font: 600 10px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4); }
+
+.principle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.principle { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-3); padding: 20px 22px; }
+.principle h5 { font-size: 14px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.principle h5 .num { width: 22px; height: 22px; border-radius: 4px; background: var(--ink-1); color: white; display: grid; place-items: center; font: 700 11px/1 var(--mono); }
+.principle p { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="hero">
+    <h1>Refined TolMaster — <b>same UI, unified language.</b></h1>
+    <p>
+      Nothing about the layout, content, or information density has changed.
+      What changed is the discipline behind the visual atoms: one radius scale, one button system, one badge system, one card chrome.
+      Status is communicated by a single mechanism (a thin accent stripe + a small badge), not by tinting whole cards.
+      Accent colour is reserved for primary action, focus, and selected state — never decoration.
+    </p>
+    <div class="meta">
+      <div><b>9</b> rule violations identified</div>
+      <div><b>3</b> radius values (was 5+)</div>
+      <div><b>1</b> button system (was ad-hoc per button)</div>
+      <div><b>1</b> badge shape (was 3 mixed)</div>
+    </div>
+  </header>
+
+  <!-- 1. RADIUS -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">01</span>
+      <span class="section-title">Radius scale</span>
+      <span class="section-desc">Collapse 5+ ad-hoc values into 3 semantic tiers.</span>
+    </div>
+
+    <div class="diff">
+      <div class="col col-before">
+        <span class="col-tag before">Before</span>
+        <h4>5 unrelated radii used interchangeably</h4>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 4px;">4</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded-[4px]</span></div>
+        </div>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 4px;">4</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded (no value)</span></div>
+        </div>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 6px;">6</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded-[6px]</span></div>
+          <div class="r-demo"><div class="r-square" style="border-radius: 6px;">6</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded-md</span></div>
+        </div>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 10px;">10</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded-[10px]</span></div>
+          <div class="r-demo"><div class="r-square" style="border-radius: 999px;">∞</div><span class="mono" style="font-size: 11px; color: var(--ink-3);">rounded-[999px]</span></div>
+        </div>
+        <ul class="notes">
+          <li>Buttons, inputs, badges all use different radii inconsistently</li>
+          <li>Modal cards mix 10px with inline 4px and 6px elements</li>
+          <li>No semantic mapping — visual rhythm broken</li>
+        </ul>
+      </div>
+      <div class="col col-after">
+        <span class="col-tag after">After</span>
+        <h4>3 semantic tiers — radius implies role</h4>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 4px;">4</div><span><b class="mono">--r-1</b> · inline tags, badges</span></div>
+        </div>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 6px;">6</div><span><b class="mono">--r-2</b> · all interactive (btn, input, toggle)</span></div>
+        </div>
+        <div class="specimen">
+          <div class="r-demo"><div class="r-square" style="border-radius: 10px;">10</div><span><b class="mono">--r-3</b> · containers, cards, panels</span></div>
+        </div>
+        <ul class="notes">
+          <li>You can predict an element's radius from its semantic role</li>
+          <li>Pill (999px) eliminated — toggles use circular knob inside r-6</li>
+          <li>One change to the token shifts the whole product</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. BUTTONS -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">02</span>
+      <span class="section-title">Button system</span>
+      <span class="section-desc">Collapse 4 ad-hoc primaries into 3 intents × 3 sizes.</span>
+    </div>
+
+    <div class="diff">
+      <div class="col col-before">
+        <span class="col-tag before">Before</span>
+        <h4>Same primary, 4 different geometries</h4>
+        <div class="specimen">
+          <button class="old-btn-1">Add Dimension</button>
+          <button class="old-btn-2">Save</button>
+          <button class="old-btn-3">Run Analysis</button>
+          <button class="old-btn-1" style="padding: 8px 14px;">Calculate Limits</button>
+        </div>
+        <div class="specimen">
+          <button class="old-btn-4">Fit Shift Calc</button>
+          <button class="old-btn-5">Invert All</button>
+          <button class="old-btn-4" style="border-radius: 6px;">Reset</button>
+        </div>
+        <ul class="notes">
+          <li>Primary buttons have 4 different paddings and 2 radii</li>
+          <li>Secondary buttons mix rounded-[4px] and rounded-[6px]</li>
+          <li>Inset-shadow gloss applied inconsistently</li>
+          <li>Font weight drifts between 500 / 600 / 700</li>
+        </ul>
+      </div>
+      <div class="col col-after">
+        <span class="col-tag after">After</span>
+        <h4>3 intents × 3 sizes, deterministic</h4>
+        <div class="specimen">
+          <button class="btn btn--primary">Primary</button>
+          <button class="btn btn--secondary">Secondary</button>
+          <button class="btn btn--ghost">Ghost</button>
+        </div>
+        <div class="specimen">
+          <button class="btn btn--primary" style="height: 24px; padding: 0 8px; font-size: 12px;">sm</button>
+          <button class="btn btn--primary">md</button>
+          <button class="btn btn--primary" style="height: 34px; padding: 0 14px; font-size: 13.5px; font-weight: 600;">lg</button>
+        </div>
+        <div class="specimen">
+          <button class="iconbtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+          <span class="mono" style="font-size: 11px; color: var(--ink-3);">iconbtn — square Secondary</span>
+        </div>
+        <ul class="notes">
+          <li>Every button shares height, padding, weight from the same scale</li>
+          <li>Inset-shadow gloss removed (it conflicts with focus ring)</li>
+          <li>Single focus indicator: <b class="mono">--ring</b> applied uniformly</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. STAT CARDS -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">03</span>
+      <span class="section-title">Status communication</span>
+      <span class="section-desc">Don't tint whole cards. Use one mechanism: stripe + badge.</span>
+    </div>
+
+    <div class="diff">
+      <div class="col col-before">
+        <span class="col-tag before">Before</span>
+        <h4>4 cards in a row, 4 different chromes</h4>
+        <div class="specimen" style="gap: 6px;">
+          <div class="old-card-yield">
+            <div class="l">Yield Rate</div>
+            <div class="v">99.984%</div>
+          </div>
+          <div class="old-card-neutral">
+            <div class="l">PPM</div>
+            <div class="v">158</div>
+          </div>
+          <div class="old-card-cpk">
+            <div class="l">Cpk</div>
+            <div class="v">1.46</div>
+          </div>
+          <div class="old-card-neutral">
+            <div class="l">Mean / σ</div>
+            <div class="v" style="font-size: 13px;">μ 0.5012<br>σ 0.0312</div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Gradient on Yield, solid soft on Cpk, neutral on others</li>
+          <li>Value colour shifts per status — uses oklch hardcoded</li>
+          <li>Eye can't scan a "row of stats" cleanly — each looks different</li>
+          <li>Warning state would be a 5th distinct background</li>
+        </ul>
+      </div>
+      <div class="col col-after">
+        <span class="col-tag after">After</span>
+        <h4>All cards same chrome; status lives in stripe + badge</h4>
+        <div class="specimen" style="gap: 6px;">
+          <div class="stat-card-demo">
+            <div class="stripe success"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div class="l">Yield</div>
+              <span class="badge badge--success"><span class="dot"></span>Capable</span>
+            </div>
+            <div class="v">99.984%</div>
+          </div>
+          <div class="stat-card-demo">
+            <div class="l">PPM</div>
+            <div class="v">158</div>
+          </div>
+          <div class="stat-card-demo">
+            <div class="stripe success"></div>
+            <div class="l">Cpk</div>
+            <div class="v">1.46</div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Card chrome is invariant — values align visually</li>
+          <li>Status communicated identically across all cards</li>
+          <li>Adding a new status state = new stripe colour, nothing else</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. BADGES -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">04</span>
+      <span class="section-title">Badges &amp; chips</span>
+      <span class="section-desc">One shape, color = semantic.</span>
+    </div>
+
+    <div class="diff">
+      <div class="col col-before">
+        <span class="col-tag before">Before</span>
+        <h4>3 different pill geometries; accent overused</h4>
+        <div class="specimen">
+          <span class="old-pill-1">FitShift</span>
+          <span class="old-pill-2">Empirical</span>
+          <span class="old-pill-3">v2.7</span>
+          <span class="old-pill-yellow">Dual-Pair FAB</span>
+        </div>
+        <ul class="notes">
+          <li>FitShift uses pill (999px), Empirical uses 6px rounded, v2.7 uses 4px</li>
+          <li>Accent blue applied to FitShift, Empirical, Mean Drift, Compression, focus, Target — meaning is lost</li>
+          <li>Dual-Pair FAB uses warning yellow as decoration (yellow should mean "warning")</li>
+        </ul>
+      </div>
+      <div class="col col-after">
+        <span class="col-tag after">One shape; colour = semantic</span>
+        <h4>All badges: r-1, mono, uppercase</h4>
+        <div class="specimen">
+          <span class="badge"><span class="dot"></span>NORM</span>
+          <span class="badge"><span class="dot"></span>UNIF</span>
+          <span class="badge">FIT SHIFT</span>
+          <span class="badge">v2.7</span>
+        </div>
+        <div class="specimen">
+          <span class="badge badge--accent"><span class="dot"></span>EMPR</span>
+          <span class="badge badge--success"><span class="dot"></span>Capable</span>
+          <span class="badge badge--warning"><span class="dot"></span>Marginal</span>
+          <span class="badge badge--danger"><span class="dot"></span>Failing</span>
+        </div>
+        <ul class="notes">
+          <li>Neutral badge for taxonomy (distribution type, FitShift category)</li>
+          <li>Accent badge ONLY for "Empirical" because it implies real measured data — meaningful highlight</li>
+          <li>Status colours reserved for actual yield/Cp state</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. COLOR DISCIPLINE -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">05</span>
+      <span class="section-title">Colour discipline</span>
+      <span class="section-desc">Define what each colour <i>means</i>. Stop using accent for decoration.</span>
+    </div>
+
+    <div class="tokens">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Token</th>
+            <th>Value</th>
+            <th>Allowed uses</th>
+            <th>Forbidden</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--accent);"></div></td>
+            <td class="token">--accent</td>
+            <td class="val">#2a6fdb</td>
+            <td class="desc">Primary button · focus ring · selected/active tab · μ line on chart</td>
+            <td class="desc" style="color: var(--ink-3);">FitShift badge, hover decoration, Mean Drift switch, Empirical label, random emphasis</td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--success);"></div></td>
+            <td class="token">--success</td>
+            <td class="val">#1d8a5a</td>
+            <td class="desc">Capable state stripe/badge · Cpk ≥ 1.33 · positive delta</td>
+            <td class="desc" style="color: var(--ink-3);">"+" sign chips (use neutral or success-soft instead — was overemphasizing trivial things)</td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--warning);"></div></td>
+            <td class="token">--warning</td>
+            <td class="val">#b06a00</td>
+            <td class="desc">Tolerance value sanity warning · Marginal status · Empirical-without-n note</td>
+            <td class="desc" style="color: var(--ink-3);">Dual-Pair FAB (was decorative, now a regular secondary button)</td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--danger);"></div></td>
+            <td class="token">--danger</td>
+            <td class="val">#b93b3b</td>
+            <td class="desc">USL/LSL lines on chart · delete hover · failure %</td>
+            <td class="desc" style="color: var(--ink-3);">"−" sign chip background tinting (reserve for actual state)</td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--ink-1);"></div></td>
+            <td class="token">--ink-1</td>
+            <td class="val">#1a1a1a</td>
+            <td class="desc">All data values · all bold text · header chrome</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--ink-2);"></div></td>
+            <td class="token">--ink-2</td>
+            <td class="val">#555452</td>
+            <td class="desc">Body text · secondary button text · spec field labels</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td class="swatch"><div class="sw" style="background: var(--ink-3);"></div></td>
+            <td class="token">--ink-3</td>
+            <td class="val">#8a8884</td>
+            <td class="desc">All eyebrow labels (mono uppercase) · meta · placeholders · grid lines</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Principles -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">06</span>
+      <span class="section-title">Five rules to keep things tight</span>
+    </div>
+    <div class="principle-grid">
+      <div class="principle">
+        <h5><span class="num">1</span> Predict-the-radius rule</h5>
+        <p>Before writing <span class="mono" style="color: var(--ink-1);">rounded-[…]</span>, ask: is this interactive (r-2), a container (r-3), or an inline tag (r-1)? If none, you probably shouldn't be drawing it.</p>
+      </div>
+      <div class="principle">
+        <h5><span class="num">2</span> Status lives in two places</h5>
+        <p>A stripe on the card edge and a badge on the top-right. Never tint the entire card. Yield, Cpk, validity — all use this same channel.</p>
+      </div>
+      <div class="principle">
+        <h5><span class="num">3</span> Accent earns its weight</h5>
+        <p>If accent appears in more than 4 places on a screen, you've made it noise. Reserve it for: primary CTA, focus state, selected tab, μ line.</p>
+      </div>
+      <div class="principle">
+        <h5><span class="num">4</span> One focus, one ring</h5>
+        <p>Every focusable thing — buttons, inputs, selects, toggles, radio — uses the same <span class="mono" style="color: var(--ink-1);">--ring</span> on focus. No border-thickness changes.</p>
+      </div>
+      <div class="principle">
+        <h5><span class="num">5</span> No off-scale values</h5>
+        <p>If a padding feels wrong on the 4px grid, fix the layout, not the value. <span class="mono" style="color: var(--ink-1);">py-1.5</span> mixed with <span class="mono" style="color: var(--ink-1);">py-2</span> is the source of most "visual jitter."</p>
+      </div>
+      <div class="principle">
+        <h5><span class="num">6</span> Header is chrome, not a slide</h5>
+        <p>The dark bar at the top is a system surface. It uses muted text and ghost buttons, never large brand statements or decorative pills.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

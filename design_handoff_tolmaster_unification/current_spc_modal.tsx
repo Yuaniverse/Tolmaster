@@ -313,15 +313,15 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-            <div className="card flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[oklch(20%_0.01_240_/_0.52)] p-4 backdrop-blur-sm">
+            <div className="hairline-card flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[10px]">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface-subtle)] px-6 py-4">
                     <div>
                         <div className="mono-label text-[var(--ink-3)]">SPC calibration . measured process data</div>
                         <h2 className="mt-1 flex items-center gap-2 text-[15px] font-semibold text-[var(--ink-1)]">
-                            <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[var(--r-2)] bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--ink-2)]">
-                                <Calculator className="h-3.5 w-3.5" />
+                            <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[4px] border border-[var(--accent-line)] bg-[var(--accent-soft)]">
+                                <Calculator className="h-3.5 w-3.5 text-[var(--accent)]" />
                             </span>
                             SPC Data Analysis
                         </h2>
@@ -331,7 +331,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                     </div>
                     <button
                         onClick={onClose}
-                        className="iconbtn ghost"
+                        className="sunken inline-flex h-8 w-8 items-center justify-center text-[var(--ink-2)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -350,7 +350,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                     Paste measurement values. Separators: newline, comma, or space.
                                 </div>
                                 <textarea
-                                    className="textarea w-full resize-none"
+                                    className="field-shell font-ui-mono h-64 w-full resize-none p-4 text-[12.5px] text-[var(--ink-1)] outline-none"
                                     placeholder="Example:&#10;10.05&#10;10.02&#10;9.98&#10;..."
                                     value={rawData}
                                     onChange={e => setRawData(e.target.value)}
@@ -371,7 +371,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                             </div>
 
                             {stats && (
-                                <div className="card pad space-y-3">
+                                <div className="hairline-card space-y-3 p-4">
                                     <div className="flex items-center justify-between border-b border-[var(--line)] pb-2">
                                         <span className="mono-label text-[var(--ink-3)]">Mean μ</span>
                                         <span className="font-ui-mono text-[13px] font-medium text-[var(--ink-1)]">{stats.mean.toFixed(4)}</span>
@@ -399,7 +399,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                             </span>
                                         </div>
                                         {stats.ad.pValue < 0.05 && (
-                                            <div className="flex items-start gap-1 rounded-[var(--r-2)] border border-[var(--warning)]/30 bg-[var(--warning-soft)] p-2 text-[10.5px] text-[var(--ink-2)]">
+                                            <div className="flex items-start gap-1 rounded-[6px] border border-[var(--warning)]/30 bg-[var(--warning-soft)] p-2 text-[10.5px] text-[var(--ink-2)]">
                                                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--warning)]" />
                                                 Data may not be normal. CP calculation assumes normality.
                                             </div>
@@ -426,7 +426,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                         </span>
                                     </label>
                                     {useEmpirical && stats.n < 20 && (
-                                        <div className="flex items-start gap-1 rounded-[var(--r-2)] border border-[var(--warning)]/30 bg-[var(--warning-soft)] p-2 text-[10.5px] text-[var(--ink-2)]">
+                                        <div className="flex items-start gap-1 rounded-[6px] border border-[var(--warning)]/30 bg-[var(--warning-soft)] p-2 text-[10.5px] text-[var(--ink-2)]">
                                             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--warning)]" />
                                             Small sample size (n={stats.n}). Empirical distribution results may be unreliable.
                                         </div>
@@ -436,7 +436,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                             <button
                                 disabled={!stats}
                                 onClick={handleApply}
-                                className="btn btn--primary w-full disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-[6px] bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--chrome)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 Apply to Dimension
                                 <ChevronRight className="w-4 h-4" />
@@ -449,7 +449,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                         {chartsData ? (
                             <>
                                 {/* Histogram */}
-                                <div className="card pad flex h-[320px] flex-col">
+                                <div className="hairline-card flex h-[320px] flex-col p-4">
                                     <div className="mb-4 flex items-center justify-between">
                                         <div>
                                             <div className="mono-label text-[var(--ink-3)]">Distribution chart</div>
@@ -459,7 +459,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                             <span className="mono-label text-[var(--ink-3)]">Bins</span>
                                             <input
                                                 type="number"
-                                                className="input right w-16"
+                                                className="field-shell font-ui-mono w-16 px-2 py-1 text-right text-[11px] outline-none"
                                                 placeholder={chartsData.binUsed.toString()}
                                                 value={binCountInput}
                                                 onChange={e => setBinCountInput(e.target.value)}
@@ -476,7 +476,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                 </div>
 
                                 {/* Q-Q Plot */}
-                                <div className="card pad flex h-[320px] flex-col">
+                                <div className="hairline-card flex h-[320px] flex-col p-4">
                                     <div className="mb-4">
                                         <div className="mono-label text-[var(--ink-3)]">Probability plot</div>
                                         <h3 className="mt-1 text-[13px] font-semibold text-[var(--ink-1)]">Q-Q plot</h3>
@@ -493,7 +493,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                 </div>
                             </>
                         ) : (
-                            <div className="card flex h-full flex-col items-center justify-center gap-4 border-dashed text-[var(--ink-3)]">
+                            <div className="hairline-card flex h-full flex-col items-center justify-center gap-4 border-dashed text-[var(--ink-3)]">
                                 <Calculator className="h-16 w-16 opacity-30" />
                                 <p className="mono-label">Paste measurement data to render the charts.</p>
                             </div>

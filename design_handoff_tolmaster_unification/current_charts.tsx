@@ -55,7 +55,7 @@ export function HistogramChart({
 }: HistogramChartProps) {
   if (!data.length) {
     return (
-      <div className="flex h-full items-center justify-center rounded-[var(--r-3)] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
+      <div className="flex h-full items-center justify-center rounded-[10px] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
         {emptyLabel}
       </div>
     );
@@ -172,8 +172,8 @@ export function HistogramChart({
           width={barWidth}
           height={Math.max(0, padding.top + plotHeight - scaleY(item.count))}
           rx="1.5"
-          fill="var(--accent-soft)"
-          stroke="var(--accent-line)"
+          fill={`oklch(95% 0.025 ${accentHue})`}
+          stroke={`oklch(86% 0.06 ${accentHue})`}
         />
       ))}
 
@@ -181,7 +181,7 @@ export function HistogramChart({
         <path
           d={normalPath}
           fill="none"
-          stroke="var(--accent)"
+          stroke={`oklch(60% 0.13 ${accentHue})`}
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -194,10 +194,10 @@ export function HistogramChart({
             y1={padding.top}
             x2={scaleX(mean as number)}
             y2={padding.top + plotHeight}
-            stroke="var(--accent)"
+            stroke={`oklch(60% 0.13 ${accentHue})`}
             strokeWidth="1.5"
           />
-          <rect x={scaleX(mean as number) - 16} y={6} width="32" height="14" rx="4" fill="var(--accent)" />
+          <rect x={scaleX(mean as number) - 16} y={6} width="32" height="14" rx="4" fill={`oklch(60% 0.13 ${accentHue})`} />
           <text x={scaleX(mean as number)} y={16} textAnchor="middle" className="fill-white text-[8.5px] font-semibold font-ui-mono tracking-[0.12em]">
             MU
           </text>
@@ -275,85 +275,61 @@ export function HorizontalBarChart({
 }: HorizontalBarChartProps) {
   if (!data.length) {
     return (
-      <div className="flex h-full items-center justify-center rounded-[var(--r-3)] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
+      <div className="flex h-full items-center justify-center rounded-[10px] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
         {emptyLabel}
       </div>
     );
   }
 
-  // Coordinate system mirrors refined.html exactly
-  const vw = 600;
-  const plotLeft = 128;
-  const plotRight = 548;
-  const plotWidth = plotRight - plotLeft; // 420
-
-  const barH = 24;
-  const barGap = 34;
-  const firstBarY = 24;
-  const lastBarBottom = firstBarY + (data.length - 1) * (barH + barGap) + barH;
-  const axisLineY = lastBarBottom + 20;
-  const axisLabelY = axisLineY + 18;
-  const vh = axisLabelY + 14;
-
-  const fixedMax = 100;
-  const ticks = [0, 25, 50, 75, 100];
-  const scaleX = (val: number) => plotLeft + (clamp(val, 0, fixedMax) / fixedMax) * plotWidth;
+  const width = 760;
+  const height = 320;
+  const padding = { top: 22, right: 38, bottom: 24, left: 130 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const rowGap = 10;
+  const rowHeight = (plotHeight - rowGap * (data.length - 1)) / data.length;
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+  const ticks = buildTicks(0, maxValue, 5);
 
   return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="none">
-      {/* Axis baseline */}
-      <line x1={plotLeft} y1={axisLineY} x2={plotRight} y2={axisLineY} stroke="var(--line-strong)" />
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full">
+      {ticks.map((tick) => {
+        const x = padding.left + (tick / maxValue) * plotWidth;
+        return (
+          <g key={`tick-${tick}`}>
+            <line x1={x} y1={padding.top} x2={x} y2={padding.top + plotHeight} stroke="var(--line)" strokeDasharray="2 3" />
+            <text x={x} y={height - 8} textAnchor="middle" className={`${svgTextClass} ${monoClass}`}>
+              {formatTick(tick, 0)}
+              {valueSuffix}
+            </text>
+          </g>
+        );
+      })}
 
-      {/* X-axis tick labels — all var(--ink-3), only last gets suffix */}
-      {ticks.map((tick) => (
-        <text
-          key={tick}
-          x={scaleX(tick)}
-          y={axisLabelY}
-          textAnchor="middle"
-          fontFamily="JetBrains Mono, monospace"
-          fontSize="9.5"
-          fill="var(--ink-3)"
-        >
-          {tick === 100 ? `${tick}${valueSuffix}` : tick}
-        </text>
-      ))}
+      <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + plotHeight} stroke="var(--line-strong)" />
 
-      {/* Bars */}
       {data.map((item, index) => {
-        const y = firstBarY + index * (barH + barGap);
-        const barWidth = scaleX(item.value) - plotLeft;
+        const y = padding.top + index * (rowHeight + rowGap);
+        const barWidth = (item.value / maxValue) * plotWidth;
 
         return (
           <g key={item.name}>
-            {/* Row label — var(--ink-2) */}
-            <text
-              x={plotLeft - 10}
-              y={y + barH / 2 + 4}
-              textAnchor="end"
-              fontFamily="JetBrains Mono, monospace"
-              fontSize="11"
-              fill="var(--ink-2)"
-            >
+            <text x={padding.left - 10} y={y + rowHeight / 2 + 4} textAnchor="end" className={`${svgTextClass} font-ui-mono`}>
               {item.name}
             </text>
-
-            {/* Background track */}
-            <rect x={plotLeft} y={y} width={plotWidth} height={barH} rx="3" fill="var(--surface-subtle)" stroke="var(--line)" />
-
-            {/* Filled bar */}
-            <rect x={plotLeft} y={y} width={barWidth} height={barH} rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)" />
-
-            {/* Value label — var(--ink-1), bold, right of bar */}
-            <text
-              x={plotLeft + barWidth + 7}
-              y={y + barH / 2 + 4}
-              fontFamily="JetBrains Mono, monospace"
-              fontSize="11"
-              fontWeight="600"
-              fill="var(--ink-1)"
-            >
-              {item.value.toFixed(1)}{valueSuffix}
+            <rect x={padding.left} y={y} width={plotWidth} height={rowHeight} rx="4" fill="var(--surface-subtle)" />
+            <rect
+              x={padding.left}
+              y={y}
+              width={barWidth}
+              height={rowHeight}
+              rx="4"
+              fill={`oklch(95% 0.025 ${accentHue})`}
+              stroke={`oklch(86% 0.06 ${accentHue})`}
+            />
+            <text x={padding.left + barWidth + 8} y={y + rowHeight / 2 + 4} className={`${svgTextClass} ${monoClass}`}>
+              {item.value.toFixed(2)}
+              {valueSuffix}
             </text>
           </g>
         );
@@ -381,7 +357,7 @@ export function QQPlotChart({
 }: QQPlotChartProps) {
   if (!data.length) {
     return (
-      <div className="flex h-full items-center justify-center rounded-[var(--r-3)] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
+      <div className="flex h-full items-center justify-center rounded-[10px] border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 text-center text-[12px] text-[var(--ink-3)]">
         {emptyLabel}
       </div>
     );
