@@ -344,7 +344,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                     Raw Measurements
                                 </label>
                                 <div className="text-xs text-slate-500 mb-2">
-                                    Paste absolute values. Separators: newline, comma, space.
+                                    Paste raw measured values (sign preserved). Separators: newline, comma, space.
                                 </div>
                                 <textarea
                                     className="w-full h-64 p-4 border rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm resize-none"

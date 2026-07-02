@@ -60,10 +60,16 @@ const randomNormal = (mean: number, stdDev: number) => {
     return mean + mag * Math.cos(2.0 * Math.PI * v) * stdDev;
 };
 
-const cpkToSigma = (tolerance: number, cpk: number): number => {
-    // σ = Tolerance / (3 × Cpk)
-    if (cpk <= 0) return tolerance / 3;
-    return tolerance / (3 * cpk);
+// Convert a (two-sided, centered) process capability Cp to sigma.
+// The UI collects "CP", and this formula σ = Tolerance / (3·Cp) is the Cp
+// definition (no mean shift), NOT Cpk — hence the name.
+const cpToSigma = (tolerance: number, cp: number): number => {
+    if (cp <= 0) {
+        // Non-positive Cp is undefined; fall back to Cp = 1 (σ = Tol/3).
+        console.warn(`Invalid Cp (${cp}) treated as 1.0 (σ = Tol/3).`);
+        return tolerance / 3;
+    }
+    return tolerance / (3 * cp);
 };
 
 // Inverse Standard Normal Distribution (for CPK calculation)
@@ -203,12 +209,12 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
             const N = 5000000;
             const margins = new Float32Array(N);
 
-            const h1Sigma = cpkToSigma(inputs.hole1Tol, inputs.hole1CP);
-            const s1Sigma = cpkToSigma(inputs.shaft1Tol, inputs.shaft1CP);
-            const h2Sigma = cpkToSigma(inputs.hole2Tol, inputs.hole2CP);
-            const s2Sigma = cpkToSigma(inputs.shaft2Tol, inputs.shaft2CP);
-            const paSigma = cpkToSigma(inputs.paTol, inputs.paCP);
-            const pbSigma = cpkToSigma(inputs.pbTol, inputs.pbCP);
+            const h1Sigma = cpToSigma(inputs.hole1Tol, inputs.hole1CP);
+            const s1Sigma = cpToSigma(inputs.shaft1Tol, inputs.shaft1CP);
+            const h2Sigma = cpToSigma(inputs.hole2Tol, inputs.hole2CP);
+            const s2Sigma = cpToSigma(inputs.shaft2Tol, inputs.shaft2CP);
+            const paSigma = cpToSigma(inputs.paTol, inputs.paCP);
+            const pbSigma = cpToSigma(inputs.pbTol, inputs.pbCP);
 
             let sum = 0;
             let min = Infinity;
@@ -607,10 +613,17 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 {mcResult && (() => {
                                     // Calculate Equiv CPK from pFailure
                                     const pFailDecimal = mcResult.pFailure / 100; // Convert % to decimal
+                                    const N = mcResult.samples.length;
                                     let equivCpk = 0;
-                                    if (pFailDecimal < 1) {
-                                        const z = normSInv(1 - pFailDecimal);
-                                        equivCpk = z / 3;
+                                    let cpkIsBound = false;
+                                    if (pFailDecimal <= 0) {
+                                        // 0 observed interferences: the MC run cannot resolve the true
+                                        // rate, so report the rule-of-three lower bound (p ≈ 3/N)
+                                        // instead of normSInv(1) = +Infinity.
+                                        equivCpk = Math.min(5.0, normSInv(1 - 3 / N) / 3);
+                                        cpkIsBound = true;
+                                    } else if (pFailDecimal < 1) {
+                                        equivCpk = Math.min(5.0, normSInv(1 - pFailDecimal) / 3);
                                     }
 
                                     // Determine background color based on CPK
@@ -635,8 +648,8 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                             <div className={`text-2xl font-bold mt-1 ${textColor}`}>
                                                 {mcResult.pFailure.toFixed(4)}%
                                             </div>
-                                            <div className="text-xs text-slate-400 mt-0.5">
-                                                Equiv. Cpk: {equivCpk.toFixed(2)}
+                                            <div className="text-xs text-slate-400 mt-0.5" title={cpkIsBound ? '0 個干涉觀察值：依 rule of three 顯示 95% 信賴下界 (p≈3/N)，實際 Cpk 可能更高。' : undefined}>
+                                                Equiv. Cpk: {cpkIsBound ? '>' : ''}{equivCpk.toFixed(2)}
                                             </div>
                                         </div>
                                     );
