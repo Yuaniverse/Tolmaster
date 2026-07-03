@@ -119,6 +119,7 @@ interface SimulationResult {
   yieldRate: number;
   ppm: number;
   cp: number;
+  cpIsLowerBound: boolean; // true when reported cp is a rule-of-three lower bound (zero observed defects)
   samples: number[];
   histogramData: any[];
   totalSampleCount: number;
@@ -521,7 +522,10 @@ const runMonteCarloSamples = (
 
     if (isCompressionMode && compressionTargetId) {
       const denom = Math.abs(targetItemValue);
-      samples[i] = denom < 0.000001 ? 0 : (stackSum / denom) * 100;
+      // Ratio undefined when the compression target ≈ 0. Mark as NaN so it is
+      // EXCLUDED from stats (via the Number.isFinite guards downstream) rather
+      // than injected as a spurious 0%, which would bias mean/σ/yield.
+      samples[i] = denom < 0.000001 ? Number.NaN : (stackSum / denom) * 100;
     } else {
       samples[i] = stackSum;
     }
@@ -957,6 +961,9 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
                   type="number" step="0.1" placeholder="1.0"
                   className="input right w-16 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={item.cp || ''}
+                  title={item.distribution === 'Normal(Sort)'
+                    ? 'Cp = 篩選「前」的製程能力。Normal(Sort) 會依規格界截斷，成品實際 σ 會小於此輸入值所對應的 σ。'
+                    : 'Cp：製程能力指數，用於換算 σ = (公差/2) / (3·Cp)。'}
                   onChange={(e) => handleUpdateItem(item.id, 'cp', parseFloat(e.target.value))}
                 />
                 <button
@@ -1347,28 +1354,36 @@ export default function TolMaster() {
     const defects = N - passCount;
     const ppm = (defects / N) * 1000000;
 
-    // Equiv Cpk: split single-sided defect rates
-    // For each spec limit, compute Z = normSInv(1 - pFail_one_side), Cpk_i = Z / 3
-    // Take the minimum (worst side). Cap at ±5.
+    // Equiv Cpk: split single-sided defect rates.
+    // For each spec limit, compute Z = normSInv(1 - pFail_one_side), Cpk_i = Z / 3,
+    // then take the minimum (worst side).
+    // Zero observed defects on a side: N samples can only support p < 3/N
+    // (rule of three, ~95% conf), so we report the Cpk *lower bound*
+    // normSInv(1 - 3/N) / 3 and flag it — a point value like 5.0 would claim
+    // resolution the simulation does not have and is discontinuous with the
+    // 1-defect case.
+    const ruleOfThreeCpk = N > 0 ? normSInv(1 - 3 / N) / 3 : 0;
+    const sideCpk = (failCount: number): { value: number; bound: boolean } => {
+      const p = N > 0 ? failCount / N : 0;
+      return p <= 0 ? { value: ruleOfThreeCpk, bound: true } : { value: normSInv(1 - p) / 3, bound: false };
+    };
+
     let cp = 0;
+    let cpIsLowerBound = false;
     if (usl === undefined && lsl === undefined) {
-      cp = defects <= 0 ? 5.0 : normSInv(1 - (defects / N)) / 3;
+      const s = sideCpk(defects);
+      cp = s.value;
+      cpIsLowerBound = s.bound;
     } else {
-      const cpComponents: number[] = [];
-      if (lsl !== undefined) {
-        const pLow = failLow / N;
-        cpComponents.push(pLow <= 0 ? 5.0 : normSInv(1 - pLow) / 3);
-      }
-      if (usl !== undefined) {
-        const pHigh = failHigh / N;
-        cpComponents.push(pHigh <= 0 ? 5.0 : normSInv(1 - pHigh) / 3);
-      }
+      const cpComponents: { value: number; bound: boolean }[] = [];
+      if (lsl !== undefined) cpComponents.push(sideCpk(failLow));
+      if (usl !== undefined) cpComponents.push(sideCpk(failHigh));
       // Fallback: if both limits are missing somehow, use total defect rate
-      if (cpComponents.length === 0) {
-        const pTotal = defects / N;
-        cpComponents.push(pTotal <= 0 ? 5.0 : normSInv(1 - pTotal) / 3);
-      }
-      cp = Math.min(5.0, Math.min(...cpComponents));
+      if (cpComponents.length === 0) cpComponents.push(sideCpk(defects));
+      // Reported Cpk is the worst (min) side; the lower-bound flag follows that side.
+      const worst = cpComponents.reduce((a, b) => (b.value < a.value ? b : a));
+      cp = worst.value;
+      cpIsLowerBound = worst.bound;
     }
 
     // Compression Mode Gap Stats (if applicable)
@@ -1388,6 +1403,7 @@ export default function TolMaster() {
       yieldRate,
       ppm,
       cp,
+      cpIsLowerBound,
       histogramData,
       samples: Array.from(samples),
       totalSampleCount: N,
@@ -2741,12 +2757,15 @@ export default function TolMaster() {
                     <div className="stat-head">
                       <span className="label flex items-center gap-1">Equiv. Cpk <Info className="w-3.5 h-3.5 cursor-help opacity-60" /></span>
                     </div>
-                    <div className="stat-val">{simulationResult.cp.toFixed(2)}</div>
+                    <div className="stat-val">{simulationResult.cpIsLowerBound ? '>' : ''}{simulationResult.cp.toFixed(2)}</div>
                     {/* Tooltip */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-3 bg-[var(--chrome)] text-white text-xs rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg">
                       <strong className="block mb-1">說明：</strong>
                       此值為「等效 Cpk」，是從實際良率反推得出。<br /><br />
                       當堆疊包含非常態分佈或 FitShift interference 失敗時，此值比傳統 Cpk 更能反映實際過程能力。
+                      {simulationResult.cpIsLowerBound && (
+                        <><br /><br />「&gt;」表示本次模擬未觀察到任何不良品，此為 rule-of-three（3/N）95% 信賴下界；實際能力可能更高，需更多迭代才能解析。</>
+                      )}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--chrome)]"></div>
                     </div>
                   </div>
