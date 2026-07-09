@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from 'react';
-import { X, Play, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { X, Play, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import DualPairMCWorker from '../workers/dualPairMC.worker.ts?worker&inline';
+import HelpTip from './HelpTip';
+import { help } from '@/content/helpContent';
 
 // --- Types ---
 interface DualPairInputs {
@@ -199,7 +201,10 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                 <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface-subtle)] p-4">
                     <div>
                         <div className="mono-label text-[var(--ink-3)]">Dual-pair interference solver</div>
-                        <h2 className="mt-1 text-[15px] font-semibold text-[var(--ink-1)]">Dual-Pair Shared Clearance Analysis</h2>
+                        <h2 className="mt-1 text-[15px] font-semibold text-[var(--ink-1)] inline-flex items-center gap-1.5">
+                            Dual-Pair Shared Clearance Analysis
+                            <HelpTip content={help['dp.overview']} maxWidth={300} />
+                        </h2>
                         <p className="mt-1 text-[12px] text-[var(--ink-2)]">Evaluate whether two hole-shaft fits can absorb pitch mismatch together.</p>
                     </div>
                     <button
@@ -501,24 +506,16 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                 <div className="mt-1 font-ui-mono text-[var(--ink-1)]">[{wcResult.c2Min}, {wcResult.c2Max}]</div>
                             </div>
                             <div>
-                                <span className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
+                                <span className="mono-label text-[var(--ink-3)] inline-flex items-center gap-1">
                                     ΔP Max
-                                    <Info className="h-3 w-3 cursor-help opacity-50" />
-                                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-52 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                        最大節距誤差。<br />ΔP = |PA − PB|<br />取 PA、PB 公差範圍所能產生的最大偏差值。
-                                        <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                    </div>
+                                    <HelpTip content={help['dp.deltaPMax']} maxWidth={240} iconClassName="h-3 w-3 opacity-50" />
                                 </span>
                                 <div className="mt-1 font-ui-mono text-[var(--warning)]">{wcResult.deltaPMax}</div>
                             </div>
                             <div>
-                                <span className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
+                                <span className="mono-label text-[var(--ink-3)] inline-flex items-center gap-1">
                                     WC Margin
-                                    <Info className="h-3 w-3 cursor-help opacity-50" />
-                                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-56 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                        最差情況餘隙（即時計算）。<br />WC Margin = (C1min + C2min) / 2 − ΔPmax<br />值 ≥ 0 表示最差情況下無干涉。
-                                        <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                    </div>
+                                    <HelpTip content={help['dp.wcMargin']} maxWidth={260} iconClassName="h-3 w-3 opacity-50" />
                                 </span>
                                 <div className={`mt-1 font-ui-mono text-[15px] font-semibold ${parseFloat(wcResult.wcMargin) >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                                     {wcResult.wcMargin}
@@ -577,13 +574,9 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                     return (
                                         <div className="card stat">
                                             <div className={`stripe ${stripeClass}`} />
-                                            <div className="mono-label text-[var(--ink-3)] relative group inline-flex items-center gap-1">
+                                            <div className="mono-label text-[var(--ink-3)] inline-flex items-center gap-1">
                                                 P(Margin &lt; 0)
-                                                <Info className="h-3 w-3 cursor-help opacity-50" />
-                                                <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-60 p-2.5 bg-[var(--chrome)] text-white text-[11px] rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg font-sans font-normal normal-case tracking-normal">
-                                                    干涉機率（Monte Carlo）。<br />模擬中 Margin &lt; 0 的樣本比例，即兩對配合同時發生干涉的概率。<br /><br />Equiv. Cpk 為從此失敗率反推的等效製程能力指數。
-                                                    <div className="absolute top-full left-4 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                                                </div>
+                                                <HelpTip content={help['dp.pMarginFail']} maxWidth={260} iconClassName="h-3 w-3 opacity-50" />
                                             </div>
                                             <div className={`mt-1 font-ui-mono text-[26px] font-semibold ${textColor}`}>
                                                 {mcResult.pFailure.toFixed(4)}%
@@ -595,7 +588,7 @@ export default function DualPairAnalysisModal({ isOpen, onClose }: DualPairAnaly
                                     );
                                 })()}
                                 <div className="card pad">
-                                    <div className="mono-label text-[var(--ink-3)]">Mean Margin</div>
+                                    <div className="mono-label text-[var(--ink-3)] inline-flex items-center gap-1">Mean Margin <HelpTip content={help['dp.margins']} maxWidth={260} iconClassName="h-3 w-3 opacity-50" /></div>
                                     <div className="mt-1 font-ui-mono text-[26px] font-semibold text-[var(--ink-1)]">{mcResult.meanMargin.toFixed(4)}</div>
                                 </div>
                                 <div className="card pad">

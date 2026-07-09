@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Info, Calculator, ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { Calculator, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { HistogramChart, QQPlotChart } from './EngineeringCharts';
+import HelpTip from './HelpTip';
+import { help } from '@/content/helpContent';
 
 interface SPCModalProps {
     isOpen: boolean;
@@ -377,11 +379,11 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                         <span className="font-ui-mono text-[13px] font-medium text-[var(--ink-1)]">{stats.mean.toFixed(4)}</span>
                                     </div>
                                     <div className="flex items-center justify-between border-b border-[var(--line)] pb-2">
-                                        <span className="mono-label text-[var(--ink-3)]">Sigma σ</span>
+                                        <span className="mono-label flex items-center gap-1 text-[var(--ink-3)]">Sigma σ <HelpTip content={help['spc.sigma']} maxWidth={240} iconClassName="h-3 w-3 opacity-60" /></span>
                                         <span className="font-ui-mono text-[13px] font-medium text-[var(--ink-1)]">{stats.sigma.toFixed(4)}</span>
                                     </div>
                                     <div className="flex items-center justify-between border-b border-[var(--line)] pb-2">
-                                        <span className="mono-label text-[var(--ink-3)]">Estimated Cp</span>
+                                        <span className="mono-label flex items-center gap-1 text-[var(--ink-3)]">Estimated Cp <HelpTip content={help['spc.estimatedCp']} maxWidth={260} iconClassName="h-3 w-3 opacity-60" /></span>
                                         <span className={`font-ui-mono text-[13px] font-semibold ${stats.cp < 1.0 ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
                                             {stats.cp.toFixed(2)}
                                         </span>
@@ -390,9 +392,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                         <div className="mb-1 flex items-center justify-between">
                                             <span className="mono-label flex items-center gap-1 text-[var(--ink-3)]">
                                                 Anderson-Darling
-                                                <span title="Anderson-Darling Test (p-value). Tests if data comes from a normal distribution. More sensitive to tail behavior than Shapiro-Wilk. p < 0.05 suggests non-normal.">
-                                                    <Info className="h-3 w-3 text-[var(--ink-3)]" />
-                                                </span>
+                                                <HelpTip content={help['spc.andersonDarling']} maxWidth={280} iconClassName="h-3 w-3 opacity-60" />
                                             </span>
                                             <span className={`font-ui-mono text-[12px] ${stats.ad.pValue < 0.05 ? 'text-[var(--warning)]' : 'text-[var(--ink-1)]'}`}>
                                                 p = {stats.ad.pValue.toFixed(3)}
@@ -421,8 +421,9 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                             onChange={(e) => setUseEmpirical(e.target.checked)}
                                             className="h-4 w-4 rounded border-[var(--line-strong)] text-[var(--accent)]"
                                         />
-                                        <span className="mono-label text-[var(--ink-2)]">
+                                        <span className="mono-label flex items-center gap-1 text-[var(--ink-2)]">
                                             Use measured distribution for simulation
+                                            <HelpTip content={help['spc.empiricalOption']} maxWidth={280} iconClassName="h-3 w-3 opacity-60" />
                                         </span>
                                     </label>
                                     {useEmpirical && stats.n < 20 && (
@@ -479,7 +480,7 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
                                 <div className="card pad flex h-[320px] flex-col">
                                     <div className="mb-4">
                                         <div className="mono-label text-[var(--ink-3)]">Probability plot</div>
-                                        <h3 className="mt-1 text-[13px] font-semibold text-[var(--ink-1)]">Q-Q plot</h3>
+                                        <h3 className="mt-1 text-[13px] font-semibold text-[var(--ink-1)] flex items-center gap-1">Q-Q plot <HelpTip content={help['spc.qqPlot']} maxWidth={280} iconClassName="h-3 w-3 opacity-60" /></h3>
                                     </div>
                                     <div className="min-h-0 flex-1">
                                         <QQPlotChart

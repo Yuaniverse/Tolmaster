@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Trash2, Save, Upload, Play, Calculator, Copy, AlertTriangle,
-  BarChart3, Link as LinkIcon, Unlink, Info, Settings,
-  ArrowUpDown, RefreshCw, Percent, Camera, FilePlus, Pencil, Activity, Sigma, Gauge, Target
+  BarChart3, Link as LinkIcon, Unlink, Settings,
+  ArrowUpDown, RefreshCw, Percent, Camera, FilePlus, Pencil, Activity, Sigma, Gauge, Target, HelpCircle
 } from 'lucide-react';
 import { toBlob } from 'html-to-image';
 import {
@@ -18,6 +18,9 @@ import {
 } from '@dnd-kit/core';
 import SPCModal from './SPCModal';
 import DualPairAnalysisModal from './DualPairAnalysisModal';
+import HelpTip from './HelpTip';
+import HelpModal from './HelpModal';
+import { help } from '@/content/helpContent';
 import {
   arrayMove,
   SortableContext,
@@ -107,6 +110,10 @@ interface AnalysisProject {
 
 interface FailureBreakdown {
   fitShiftInterference: number;
+  // Ratio undefined: compression target ≈ 0 so the ratio (stack/target) has no
+  // meaning. Tracked separately from FitShift interference so the two invalid
+  // sample causes are not conflated in the failure breakdown.
+  ratioUndefined: number;
   upperSpec: number;
   lowerSpec: number;
 }
@@ -125,6 +132,10 @@ interface SimulationResult {
   totalSampleCount: number;
   validSampleCount: number;
   fitShiftInterferenceCount: number;
+  ratioUndefinedCount: number;
+  // True when the compression target distribution straddles zero, so ratios can
+  // blow up / flip sign and mean/σ/histogram are unreliable.
+  compressionTargetStraddlesZero?: boolean;
   failHighCount: number;
   failLowCount: number;
   failureBreakdown: FailureBreakdown;
@@ -155,8 +166,24 @@ interface SolverResult {
   centeredRatio: number;      // achieved mean ratio %
   targetCpk: number;
   feasible: boolean;          // target reached within tolerance under bounds
+  denomStep?: number;         // discrete step applied to the denominator (e.g. 0.5 for thermal pad)
+  snappedToStep?: boolean;    // true when the denominator was snapped to a discrete step grid
+  idealDenomDisplay?: number; // continuous ideal magnitude before snapping (reference)
+  denomTolPlus?: number;      // thickness-scaled ± tolerance (thermal pad: thickness × 10%)
+  denomTolMinus?: number;     // written back with the thickness so σ matches the chosen pad
   note?: string;
 }
+
+// Per-free-variable bounds for the nominal solver: min/max in display magnitude,
+// plus an optional discrete step and size-scaled tolerance ratio (both only
+// meaningful on the denominator / compression target).
+type SolverBound = { min?: number; max?: number; step?: number; tolRatio?: number };
+
+// Stable empty defaults so a project with no solver state yet reuses the same
+// object identity each render — otherwise the "clear stale result" effect keyed
+// on solverFreeIds/solverBounds would fire on every render.
+const EMPTY_SOLVER_FREE_IDS: Set<string> = new Set();
+const EMPTY_SOLVER_BOUNDS: Record<string, SolverBound> = {};
 
 // --- Helper Functions ---
 
@@ -313,6 +340,22 @@ const calculateFitShiftVariance = (fitParams: FitParams): number => {
     : gapSecondMomentApprox / 12;
 };
 
+// Clear compressionTargetId when it no longer points at a valid, selectable
+// target: a deleted/missing item, or a FitShift item (whose `nominal` the sampler
+// ignores, so it can never act as a real compression denominator). Centralised
+// here and applied on every load/import path so a dangling or invalid reference
+// can never reach the Monte Carlo core, where a ~0 denominator would invalidate
+// every sample and be misread as a total-failure run.
+const normalizeCompressionTarget = <T extends { compressionTargetId?: string | null; items: ToleranceItem[] }>(project: T): T => {
+  const id = project.compressionTargetId;
+  if (!id) return project;
+  const target = project.items.find(it => it.id === id);
+  if (!target || target.type === 'FitShift') {
+    return { ...project, compressionTargetId: null };
+  }
+  return project;
+};
+
 const getWarning = (valStr: string, type: 'Tolerance'): string | null => {
   if (/^0\d+/.test(valStr)) {
     return "Suspected missing decimal point (e.g. 0.15?)";
@@ -388,7 +431,7 @@ interface MonteCarloOptions {
 const runMonteCarloSamples = (
   items: ToleranceItem[],
   opts: MonteCarloOptions
-): { samples: Float32Array; gapStats: { mean: number; min: number; max: number } | null } => {
+): { samples: Float32Array; gapStats: { mean: number; min: number; max: number } | null; targetStraddlesZero: boolean } => {
   const { N, isCompressionMode, compressionTargetId } = opts;
   const samples = new Float32Array(N);
 
@@ -431,6 +474,26 @@ const runMonteCarloSamples = (
   let gapMax = -Infinity;
   let validGapCount = 0;
 
+  // Compression-target sign/scale tracking. The ratio blows up as the target
+  // approaches zero, and Math.abs() hides a sign flip, so we (a) scale the
+  // "undefined" cutoff to the target's own magnitude instead of a fixed 1e-6,
+  // and (b) flag when the target distribution straddles zero.
+  let targetMin = Infinity;
+  let targetMax = -Infinity;
+  let denomCutoff = 0.000001;
+  if (isCompressionMode && compressionTargetId) {
+    const tItem = items.find(it => it.id === compressionTargetId);
+    if (tItem) {
+      // Scale of the target: |nominal| plus its tolerance span, floored so a
+      // zero-nominal target still gets a sane cutoff.
+      const tScale = Math.max(
+        Math.abs(tItem.nominal) + Math.abs(tItem.tolPlus) + Math.abs(tItem.tolMinus),
+        1e-9
+      );
+      denomCutoff = Math.max(1e-6, tScale * 1e-4);
+    }
+  }
+
   for (let i = 0; i < N; i++) {
     let stackSum = 0;
     let targetItemValue = 0;
@@ -464,9 +527,12 @@ const runMonteCarloSamples = (
           itemVal = Math.random() * gap - gap / 2;
         }
 
-        if (isCompressionMode && items[j].id === compressionTargetId) {
-          targetItemValue = gap;
-        }
+        // A FitShift item can never be the compression target/denominator: its
+        // `nominal` isn't a controllable dimension (the denominator would be the
+        // whole hole–shaft gap), so it is banned in the UI and by
+        // normalizeCompressionTarget on every load/import. No target-tracking
+        // branch here — keeping one would imply a support path that does not
+        // (and must not) exist.
       } else {
         if (p.dist === 'Normal') {
           let currentMean = p.mean;
@@ -502,6 +568,8 @@ const runMonteCarloSamples = (
 
         if (isCompressionMode && items[j].id === compressionTargetId) {
           targetItemValue = itemVal;
+          if (itemVal < targetMin) targetMin = itemVal;
+          if (itemVal > targetMax) targetMax = itemVal;
         }
       }
 
@@ -522,10 +590,13 @@ const runMonteCarloSamples = (
 
     if (isCompressionMode && compressionTargetId) {
       const denom = Math.abs(targetItemValue);
-      // Ratio undefined when the compression target ≈ 0. Mark as NaN so it is
-      // EXCLUDED from stats (via the Number.isFinite guards downstream) rather
-      // than injected as a spurious 0%, which would bias mean/σ/yield.
-      samples[i] = denom < 0.000001 ? Number.NaN : (stackSum / denom) * 100;
+      // Ratio undefined when the compression target ≈ 0 (relative cutoff, scaled
+      // to the target's own magnitude). Encoded as -Infinity — a DISTINCT
+      // sentinel from the NaN used for FitShift interference — so downstream can
+      // report the two invalid causes separately. Note: like NaN, these samples
+      // are excluded from mean/σ but DO count against yield/PPM (they are real
+      // invalid outcomes, not passes).
+      samples[i] = denom < denomCutoff ? Number.NEGATIVE_INFINITY : (stackSum / denom) * 100;
     } else {
       samples[i] = stackSum;
     }
@@ -535,7 +606,11 @@ const runMonteCarloSamples = (
     ? { mean: gapSum / validGapCount, min: gapMin, max: gapMax }
     : null;
 
-  return { samples, gapStats };
+  const targetStraddlesZero = isCompressionMode && !!compressionTargetId
+    && Number.isFinite(targetMin) && Number.isFinite(targetMax)
+    && targetMin < 0 && targetMax > 0;
+
+  return { samples, gapStats, targetStraddlesZero };
 };
 
 // Lightweight stats for the optimizer. Returns TWO Cpk flavours:
@@ -546,6 +621,19 @@ const runMonteCarloSamples = (
 //             solver's number matches the app's. The two differ because the
 //             compression ratio (a ratio of normals) has heavier-than-normal
 //             tails, so the defect-based Cpk runs below the μ/σ one.
+// Shared defect-rate -> equivalent-Cpk conversion. Zero observed defects on a
+// side can only support p < 3/N (rule of three, ~95% conf), so we report the
+// Cpk LOWER BOUND normSInv(1 - 3/N)/3 and flag it, rather than a flat cap that
+// would (a) claim resolution the sim lacks and (b) be discontinuous with the
+// 1-defect case. Used by both ratioStats (solver) and calculateSimulationStats
+// (result card) so their numbers agree.
+const defectRateToCpk = (failCount: number, N: number): { value: number; bound: boolean } => {
+  if (N <= 0) return { value: 0, bound: false };
+  const p = failCount / N;
+  if (p <= 0) return { value: normSInv(1 - 3 / N) / 3, bound: true };
+  return { value: normSInv(1 - p) / 3, bound: false };
+};
+
 const ratioStats = (
   samples: Float32Array,
   lsl: number,
@@ -579,13 +667,12 @@ const ratioStats = (
     ? Math.min(5.0, Math.min((usl - mean) / (3 * std), (mean - lsl) / (3 * std)))
     : 5.0;
 
-  // Equivalent Cpk — identical method to calculateSimulationStats (defect rate
-  // over total N, inverted through the normal CDF, worst side, capped at 5).
-  const pLow = failLow / N;
-  const pHigh = failHigh / N;
-  const cpL = pLow <= 0 ? 5.0 : normSInv(1 - pLow) / 3;
-  const cpH = pHigh <= 0 ? 5.0 : normSInv(1 - pHigh) / 3;
-  const cpEquiv = Math.min(5.0, Math.min(cpL, cpH));
+  // Equivalent Cpk — via the SHARED defectRateToCpk helper (same rule-of-three
+  // lower bound as calculateSimulationStats), so the solver's reported value is
+  // reproducible on the result card. Worst (min) side wins.
+  const cpL = defectRateToCpk(failLow, N).value;
+  const cpH = defectRateToCpk(failHigh, N).value;
+  const cpEquiv = Math.min(cpL, cpH);
 
   return { mean, std, cp, cpEquiv, yieldRate: (pass / N) * 100, defects: failLow + failHigh };
 };
@@ -721,14 +808,22 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
       </td>
       <td className="font-ui-mono w-10 px-4 py-2 text-left text-[12px] text-[var(--ink-3)]">
         {isCompressionMode ? (
-          <input
-            type="radio"
-            name="compressionTarget"
-            checked={isCompressionTarget}
-            onChange={() => setCompressionTarget(item.id)}
-            className="h-4 w-4 cursor-pointer border-[var(--line-strong)] text-[var(--accent)]"
-            title="Select as Compression Target"
-          />
+          item.type === 'FitShift' ? (
+            // FitShift items cannot be a compression target: the denominator
+            // would be the whole hole-shaft gap (not a controllable nominal),
+            // the sampler ignores `nominal` for FitShift so the solver spins
+            // uselessly, and the resulting ratio is meaningless. Disallow.
+            <span title="FitShift items cannot be a compression target" className="text-[var(--ink-3)]">—</span>
+          ) : (
+            <input
+              type="radio"
+              name="compressionTarget"
+              checked={isCompressionTarget}
+              onChange={() => setCompressionTarget(item.id)}
+              className="h-4 w-4 cursor-pointer border-[var(--line-strong)] text-[var(--accent)]"
+              title="Select as Compression Target"
+            />
+          )
         ) : (
           idx + 1
         )}
@@ -918,24 +1013,28 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
                   </button>
                 </div>
               ) : (
-                <select
-                  className="select"
-                  value={item.distribution}
-                  onChange={(e) => handleUpdateItem(item.id, 'distribution', e.target.value)}
-                >
-                  <option value="Normal">Normal</option>
-                  <option value="Normal(Sort)">Normal (Sort)</option>
-                  <option value="Uniform">Uniform</option>
-                </select>
+                <span className="flex items-center gap-1">
+                  <select
+                    className="select"
+                    value={item.distribution}
+                    onChange={(e) => handleUpdateItem(item.id, 'distribution', e.target.value)}
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="Normal(Sort)">Normal (Sort)</option>
+                    <option value="Uniform">Uniform</option>
+                  </select>
+                  <HelpTip content={help['dist.comparison']} maxWidth={320} />
+                </span>
               )}
 
               {/* Dynamic Mean Drift Toggle - Only for Normal distributions */}
               {(item.distribution === 'Normal' || item.distribution === 'Normal(Sort)') && (
                 <div className="flex items-center">
                   <div className="mx-2 h-6 w-px bg-[var(--line)]"></div>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleUpdateItem(item.id, 'enableDynamicMeanShift', !item.enableDynamicMeanShift)}>
-                    <span className="mono-label mr-2 select-none text-[var(--ink-3)]" title="啟用後，模擬製程均值在 ±1.5σ 範圍內隨機漂移（均勻分佈），反映長期生產變異對良率的影響。">Mean Drift</span>
-                    <div className={`toggle${item.enableDynamicMeanShift ? ' on' : ''}`}>
+                  <div className="flex items-center gap-1">
+                    <span className="mono-label select-none text-[var(--ink-3)] cursor-pointer" onClick={() => handleUpdateItem(item.id, 'enableDynamicMeanShift', !item.enableDynamicMeanShift)}>Mean Drift</span>
+                    <HelpTip content={help['table.meanDrift']} maxWidth={280} />
+                    <div className={`toggle ml-1${item.enableDynamicMeanShift ? ' on' : ''}`} onClick={() => handleUpdateItem(item.id, 'enableDynamicMeanShift', !item.enableDynamicMeanShift)}>
                       <span className="knob"></span>
                     </div>
                   </div>
@@ -961,11 +1060,9 @@ const SortableTableRow = ({ item, idx, handleUpdateItem, handleDeleteItem, toggl
                   type="number" step="0.1" placeholder="1.0"
                   className="input right w-16 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={item.cp || ''}
-                  title={item.distribution === 'Normal(Sort)'
-                    ? 'Cp = 篩選「前」的製程能力。Normal(Sort) 會依規格界截斷，成品實際 σ 會小於此輸入值所對應的 σ。'
-                    : 'Cp：製程能力指數，用於換算 σ = (公差/2) / (3·Cp)。'}
                   onChange={(e) => handleUpdateItem(item.id, 'cp', parseFloat(e.target.value))}
                 />
+                <HelpTip content={item.distribution === 'Normal(Sort)' ? help['table.cpNormalSort'] : help['table.cp']} maxWidth={280} />
                 <button
                   onClick={() => onOpenSPC(item.id)}
                   className="iconbtn sm ghost"
@@ -1016,10 +1113,20 @@ export default function TolMaster() {
     ?? (simulationResult?.samples ? simulationResult.samples.filter(sample => Number.isFinite(sample)).length : 0);
   const simulationFitShiftInterferenceCount = simulationResult?.fitShiftInterferenceCount
     ?? Math.max(0, simulationTotalSampleCount - simulationValidSampleCount);
-  const simulationFailureBreakdown = simulationResult?.failureBreakdown ?? {
-    fitShiftInterference: simulationTotalSampleCount > 0 ? (simulationFitShiftInterferenceCount / simulationTotalSampleCount) * 100 : 0,
-    upperSpec: 0,
-    lowerSpec: 0
+  const simulationRatioUndefinedCount = simulationResult?.ratioUndefinedCount ?? 0;
+  // Build a fully-populated breakdown even when an imported result predates a
+  // field. A bare `?? {...}` fallback only fires when the whole object is
+  // absent, so an old export whose failureBreakdown lacks `ratioUndefined`
+  // would still leave that field undefined and crash `.toFixed()` on render
+  // (TypeError → ErrorBoundary replaces the entire app). Default each field.
+  const rawFailureBreakdown = simulationResult?.failureBreakdown;
+  const simulationFailureBreakdown = {
+    fitShiftInterference: rawFailureBreakdown?.fitShiftInterference
+      ?? (simulationTotalSampleCount > 0 ? (simulationFitShiftInterferenceCount / simulationTotalSampleCount) * 100 : 0),
+    ratioUndefined: rawFailureBreakdown?.ratioUndefined
+      ?? (simulationTotalSampleCount > 0 ? (simulationRatioUndefinedCount / simulationTotalSampleCount) * 100 : 0),
+    upperSpec: rawFailureBreakdown?.upperSpec ?? 0,
+    lowerSpec: rawFailureBreakdown?.lowerSpec ?? 0
   };
 
   const setSimulationResult = (res: SimulationResult | null) => {
@@ -1046,21 +1153,74 @@ export default function TolMaster() {
 
   const [specInputMode, setSpecInputMode] = useState<'Manual' | 'TargetCPK' | 'SolveNominal' | null>('Manual');
 
-  // Compression-Mode nominal optimizer state (transient — not persisted to project)
-  const [solverFreeIds, setSolverFreeIds] = useState<Set<string>>(new Set());
-  const [solverBounds, setSolverBounds] = useState<Record<string, { min?: number; max?: number }>>({});
+  // Compression-Mode nominal optimizer state (transient — not persisted to
+  // project). Keyed BY PROJECT ID so switching tabs can't prune/overwrite one
+  // project's free vars & bounds against another project's item ids. The active
+  // project's slice is derived below and exposed via solverFreeIds/solverBounds
+  // + wrapper setters, so the call sites stay unchanged.
+  const activeProjectId = activeProject?.id ?? '';
+  const [solverFreeIdsByProject, setSolverFreeIdsByProject] = useState<Record<string, Set<string>>>({});
+  const [solverBoundsByProject, setSolverBoundsByProject] = useState<Record<string, Record<string, SolverBound>>>({});
+  const solverFreeIds = solverFreeIdsByProject[activeProjectId] ?? EMPTY_SOLVER_FREE_IDS;
+  const solverBounds = solverBoundsByProject[activeProjectId] ?? EMPTY_SOLVER_BOUNDS;
+  const setSolverFreeIds = (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    setSolverFreeIdsByProject(prev => {
+      const cur = prev[activeProjectId] ?? EMPTY_SOLVER_FREE_IDS;
+      const next = typeof updater === 'function' ? updater(cur) : updater;
+      return next === cur ? prev : { ...prev, [activeProjectId]: next };
+    });
+  };
+  const setSolverBounds = (updater: Record<string, SolverBound> | ((prev: Record<string, SolverBound>) => Record<string, SolverBound>)) => {
+    setSolverBoundsByProject(prev => {
+      const cur = prev[activeProjectId] ?? EMPTY_SOLVER_BOUNDS;
+      const next = typeof updater === 'function' ? updater(cur) : updater;
+      return next === cur ? prev : { ...prev, [activeProjectId]: next };
+    });
+  };
   const [solverTargetCpk, setSolverTargetCpk] = useState<number>(1.33);
   const [solverResult, setSolverResult] = useState<SolverResult | null>(null);
   const [solverError, setSolverError] = useState<string | null>(null);
   const [solverBusy, setSolverBusy] = useState<boolean>(false);
 
   // Clear any previous solver result/error when the inputs that produced it
-  // change, so a stale card (e.g. solved before a free var was checked) can't
-  // mislead. The result only stays while its inputs are untouched.
+  // change, so a stale card (e.g. solved before a free var was checked, or
+  // before a denominator tolerance was edited) can't mislead — the Apply button
+  // would otherwise write a solution computed against dimensions that no longer
+  // exist. The solve reads the full item stack, so any change to an item's
+  // nominal/tolerance/type/distribution or a FitShift's params invalidates it.
+  const itemsSolveSignature = (activeProject?.items ?? [])
+    .map(i => [
+      i.id, i.type, i.nominal, i.tolPlus, i.tolMinus, i.distribution, i.cp,
+      i.enableDynamicMeanShift ? 1 : 0,
+      i.fitParams ? JSON.stringify(i.fitParams) : '',
+      i.empiricalModel ? `${i.empiricalModel.mean},${i.empiricalModel.std}` : ''
+    ].join(':'))
+    .join('|');
   useEffect(() => {
     setSolverResult(null);
     setSolverError(null);
-  }, [solverFreeIds, solverBounds, solverTargetCpk, compressionTargetId, activeProject?.specLower, activeProject?.specUpper]);
+  }, [solverFreeIds, solverBounds, solverTargetCpk, compressionTargetId, activeProject?.specLower, activeProject?.specUpper, itemsSolveSignature]);
+
+  // Prune transient solver state whenever the item set changes (edit/import/
+  // load), so solveNominals can't pick a deleted id as the centering variable
+  // and handleApplySolverResult can't silently drop updates for dead ids.
+  const itemIdSignature = activeProject?.items.map(i => i.id).join(',') ?? '';
+  useEffect(() => {
+    const liveIds = new Set((activeProject?.items ?? []).map(i => i.id));
+    setSolverFreeIds(prev => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach(id => { if (liveIds.has(id)) next.add(id); else changed = true; });
+      return changed ? next : prev;
+    });
+    setSolverBounds(prev => {
+      const keys = Object.keys(prev);
+      if (keys.every(k => liveIds.has(k))) return prev;
+      const next: Record<string, SolverBound> = {};
+      keys.forEach(k => { if (liveIds.has(k)) next[k] = prev[k]; });
+      return next;
+    });
+  }, [itemIdSignature]);
   const [isRunningSimulation, setIsRunningSimulation] = useState(false);
   const [lastRunMeta, setLastRunMeta] = useState<{ ranAt: number; durationMs: number } | null>(null);
 
@@ -1069,6 +1229,28 @@ export default function TolMaster() {
 
   // Dual-Pair Clearance Modal State
   const [isDualPairModalOpen, setIsDualPairModalOpen] = useState(false);
+
+  // Help Modal State
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('tolmaster_help_seen_v1')) {
+        setIsHelpOpen(true);
+      }
+    } catch (e) {
+      console.warn('Unable to read help-seen flag', e);
+    }
+  }, []);
+
+  const handleCloseHelp = () => {
+    setIsHelpOpen(false);
+    try {
+      localStorage.setItem('tolmaster_help_seen_v1', '1');
+    } catch (e) {
+      console.warn('Unable to persist help-seen flag', e);
+    }
+  };
 
   const handleOpenSPC = (id: string) => setSpcState({ isOpen: true, itemId: id });
   const handleCloseSPC = () => setSpcState({ isOpen: false, itemId: null });
@@ -1143,8 +1325,12 @@ export default function TolMaster() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setProjects(parsed);
-        if (parsed.length > 0) setActiveTabId(parsed[0].id);
+        // Clear any dangling/invalid compression targets persisted by an older
+        // build (or a build predating the delete-time cleanup) before they reach
+        // the sampler. See normalizeCompressionTarget.
+        const normalized = Array.isArray(parsed) ? parsed.map(normalizeCompressionTarget) : parsed;
+        setProjects(normalized);
+        if (normalized.length > 0) setActiveTabId(normalized[0].id);
       } catch (e) {
         console.error("Failed to load saved projects", e);
       }
@@ -1268,6 +1454,13 @@ export default function TolMaster() {
   // Simulation Data Ref (for instant recalculation)
   const simulationSamplesRef = useRef<Float32Array | null>(null);
 
+  // Per-(project, mode) spec-window cache. Compression Mode and absolute mode
+  // interpret specLower/specUpper/targetNominal differently, so toggling clears
+  // the active values — but we stash them here first and restore the target
+  // mode's previous values, so a mode toggle (or a quick peek) no longer
+  // destroys the user's configured spec window.
+  const specWindowCacheRef = useRef<Record<string, { specLower?: number; specUpper?: number; targetNominal?: number }>>({});
+
   // Helper: Calculate Stats from Samples
   const calculateSimulationStats = (samples: Float32Array, project: AnalysisProject): SimulationResult => {
     const N = samples.length;
@@ -1276,11 +1469,15 @@ export default function TolMaster() {
     let max = -Infinity;
     let validSampleCount = 0;
     let fitShiftInterferenceCount = 0;
+    let ratioUndefinedCount = 0;
 
     for (let i = 0; i < N; i++) {
       const val = samples[i];
       if (!Number.isFinite(val)) {
-        fitShiftInterferenceCount++;
+        // -Infinity is the compression ratio-undefined sentinel; any other
+        // non-finite value (NaN) is FitShift interference.
+        if (val === Number.NEGATIVE_INFINITY) ratioUndefinedCount++;
+        else fitShiftInterferenceCount++;
         continue;
       }
 
@@ -1362,11 +1559,7 @@ export default function TolMaster() {
     // normSInv(1 - 3/N) / 3 and flag it — a point value like 5.0 would claim
     // resolution the simulation does not have and is discontinuous with the
     // 1-defect case.
-    const ruleOfThreeCpk = N > 0 ? normSInv(1 - 3 / N) / 3 : 0;
-    const sideCpk = (failCount: number): { value: number; bound: boolean } => {
-      const p = N > 0 ? failCount / N : 0;
-      return p <= 0 ? { value: ruleOfThreeCpk, bound: true } : { value: normSInv(1 - p) / 3, bound: false };
-    };
+    const sideCpk = (failCount: number): { value: number; bound: boolean } => defectRateToCpk(failCount, N);
 
     let cp = 0;
     let cpIsLowerBound = false;
@@ -1384,6 +1577,22 @@ export default function TolMaster() {
       const worst = cpComponents.reduce((a, b) => (b.value < a.value ? b : a));
       cp = worst.value;
       cpIsLowerBound = worst.bound;
+    }
+
+    // Invalid samples (compression ratio-undefined, or FitShift interference) are
+    // real failures that the per-side USL/LSL counts never see, so the block above
+    // can report a healthy Cpk next to a collapsed yield. Fold the total defect
+    // rate — which already includes these samples — back in as a lower bound so
+    // Cpk and yield can't contradict each other. defectRateToCpk goes to -Infinity
+    // as the defect rate approaches 1, so clamp the folded value at 0.
+    const invalidSampleCount = fitShiftInterferenceCount + ratioUndefinedCount;
+    if (invalidSampleCount > 0) {
+      const overall = sideCpk(defects);
+      const overallValue = Number.isFinite(overall.value) ? Math.max(0, overall.value) : 0;
+      if (overallValue < cp) {
+        cp = overallValue;
+        cpIsLowerBound = false;
+      }
     }
 
     // Compression Mode Gap Stats (if applicable)
@@ -1409,10 +1618,12 @@ export default function TolMaster() {
       totalSampleCount: N,
       validSampleCount,
       fitShiftInterferenceCount,
+      ratioUndefinedCount,
       failHighCount: failHigh,
       failLowCount: failLow,
       failureBreakdown: {
         fitShiftInterference: (fitShiftInterferenceCount / N) * 100,
+        ratioUndefined: (ratioUndefinedCount / N) * 100,
         upperSpec: (failHigh / N) * 100,
         lowerSpec: (failLow / N) * 100
       },
@@ -1448,11 +1659,17 @@ export default function TolMaster() {
       if (samplesToUse) {
         const newStats = calculateSimulationStats(samplesToUse, activeProject);
 
-        // Preserve existing gapStats if possible
+        // Preserve fields that depend on the item distributions, not the specs:
+        // a spec-only recalc doesn't re-run the sampler, so gapStats and the
+        // straddles-zero flag must be carried over — otherwise nudging a spec
+        // silently drops the "compression target straddles zero" warning banner.
         setResultsMap(prev => {
           const existing = prev[activeProject.id];
           if (existing && existing.gapStats) {
             newStats.gapStats = existing.gapStats;
+          }
+          if (existing && existing.compressionTargetStraddlesZero !== undefined) {
+            newStats.compressionTargetStraddlesZero = existing.compressionTargetStraddlesZero;
           }
           return { ...prev, [activeProject.id]: newStats };
         });
@@ -1460,7 +1677,10 @@ export default function TolMaster() {
     }, 300); // Debounce 300ms
 
     return () => clearTimeout(timer);
-  }, [activeProject?.specUpper, activeProject?.specLower, activeProject?.targetNominal, activeProject?.id, resultsMap]);
+    // NOTE: resultsMap is intentionally NOT a dependency. The body writes into
+    // resultsMap via functional setState, so listing it here caused the effect
+    // to retrigger itself on a 300ms timer forever after any simulation.
+  }, [activeProject?.specUpper, activeProject?.specLower, activeProject?.targetNominal, activeProject?.id]);
 
 
   const runSimulation = () => {
@@ -1473,7 +1693,7 @@ export default function TolMaster() {
       const startTime = performance.now();
       const N = activeProject.simulationCount || 5000000;
 
-      const { samples, gapStats } = runMonteCarloSamples(activeProject.items, {
+      const { samples, gapStats, targetStraddlesZero } = runMonteCarloSamples(activeProject.items, {
         N,
         isCompressionMode,
         compressionTargetId
@@ -1487,6 +1707,7 @@ export default function TolMaster() {
       if (gapStats) {
         result.gapStats = gapStats;
       }
+      result.compressionTargetStraddlesZero = targetStraddlesZero;
 
       const durationMs = performance.now() - startTime;
       console.log(`Simulation took ${durationMs}ms`);
@@ -1564,18 +1785,48 @@ export default function TolMaster() {
       return mag;
     };
 
+    // Discrete step for the denominator (e.g. thermal pad only comes in 0.5 mm
+    // increments). When set, the solver cannot hit an arbitrary Cpk; instead it
+    // returns the SMALLEST on-grid magnitude that still meets the target Cpk.
+    const denomStepRaw = solverBounds[denomId]?.step;
+    const denomStep = (denomStepRaw != null && Number.isFinite(denomStepRaw) && denomStepRaw > 0)
+      ? denomStepRaw : undefined;
+    // Some denominators have a tolerance that scales with their size rather than
+    // a fixed band — e.g. a thermal pad is typically ±10% of thickness. This is
+    // NOT a universal assumption: it only applies when the user explicitly sets a
+    // tolerance ratio (%) for THIS denominator. A spring, a machined part, or any
+    // part with a fixed tolerance leaves it blank and keeps its own tol as-is.
+    const denomTolRatioRaw = solverBounds[denomId]?.tolRatio;
+    const denomTolRatio = (denomTolRatioRaw != null && Number.isFinite(denomTolRatioRaw) && denomTolRatioRaw > 0)
+      ? denomTolRatioRaw / 100 : undefined; // stored as %, used as fraction
+    // Returns the size-scaled ± tolerance for a given magnitude, or null when no
+    // ratio is set (→ caller must NOT override the item's own tolerance).
+    const padTolFor = (magnitude: number): number | null =>
+      denomTolRatio != null ? Math.abs(magnitude) * denomTolRatio : null;
+
     const buildCandidate = (Tmag: number) => {
       const denomSign = Math.sign(denomItem.nominal) || -1;
       const denomNom = denomSign * Tmag;
-      const TeffAbs = Math.abs(denomNom + effOffset(denomItem));
+      // Apply the denominator's size-scaled tolerance ratio (if set) up front, so
+      // the SAME symmetric tolerance drives both the centering solve below and
+      // the sample generator. Doing this only after centering (as the old
+      // discrete path did) centred against the item's original — possibly
+      // asymmetric — offset, so every candidate was evaluated off the window
+      // centre. Applying it here also makes the ratio take effect regardless of
+      // whether a discrete step is set.
+      const denomTol = padTolFor(Tmag); // null → keep the item's own tolerance
+      const denomEffItem: ToleranceItem = denomTol == null
+        ? { ...denomItem, nominal: denomNom }
+        : { ...denomItem, nominal: denomNom, tolPlus: denomTol, tolMinus: denomTol, isSymmetric: true };
+      const TeffAbs = Math.abs(denomNom + effOffset(denomEffItem));
 
       let centeringNom: number | null = null;
       if (centeringItem) {
         let sumOthers = 0;
         for (const it of items) {
           if (it.id === centeringItem.id) continue;
-          const nom = it.id === denomId ? denomNom : it.nominal;
-          sumOthers += nom + effOffset(it);
+          const effItem = it.id === denomId ? denomEffItem : it;
+          sumOthers += (it.id === denomId ? denomNom : it.nominal) + effOffset(effItem);
         }
         const centerEff = (mid / 100) * TeffAbs - sumOthers;
         let cNom = centerEff - effOffset(centeringItem);
@@ -1585,11 +1836,11 @@ export default function TolMaster() {
       }
 
       const candidateItems = items.map(it => {
-        if (it.id === denomId) return { ...it, nominal: denomNom };
+        if (it.id === denomId) return denomEffItem;
         if (centeringItem && it.id === centeringItem.id) return { ...it, nominal: centeringNom as number };
         return it;
       });
-      return { candidateItems, denomNom, centeringNom };
+      return { candidateItems, denomNom, centeringNom, denomTol };
     };
 
     const evalCp = (candidateItems: ToleranceItem[], N: number) => {
@@ -1642,14 +1893,96 @@ export default function TolMaster() {
     let candidate = buildCandidate(Tmag);
     let finalStats = evalCp(candidate.candidateItems, finalN);
 
-    // One non-normality correction so the EQUIVALENT Cpk (not parametric) lands
-    // on target — only when equiv is reliable and the denominator can still move.
-    if (equivReliable(finalStats) && !atDenomBound(Tmag) &&
-        Math.abs(finalStats.cpEquiv - targetCpk) / targetCpk > 0.03) {
-      const k = finalStats.cp / finalStats.cpEquiv; // >1 due to heavy tails
-      Tmag = searchParam(targetCpk * k);
-      candidate = buildCandidate(Tmag);
-      finalStats = evalCp(candidate.candidateItems, finalN);
+    // Non-normality gap factor k = parametric / equivalent Cpk (>1 because the
+    // compression ratio has heavier-than-normal tails). Measured whenever the
+    // ideal point has enough tail defects to trust the equivalent Cpk. Used to
+    // (a) re-solve the continuous ideal so the EQUIVALENT Cpk lands on target,
+    // and (b) below, deflate the parametric Cpk on the discrete grid so every
+    // grid candidate is judged by ONE consistent metric.
+    let nonNormalK = 1;
+    if (equivReliable(finalStats)) {
+      nonNormalK = finalStats.cp / finalStats.cpEquiv;
+      if (!atDenomBound(Tmag) && Math.abs(finalStats.cpEquiv - targetCpk) / targetCpk > 0.03) {
+        Tmag = searchParam(targetCpk * nonNormalK);
+        candidate = buildCandidate(Tmag);
+        finalStats = evalCp(candidate.candidateItems, finalN);
+        if (equivReliable(finalStats)) nonNormalK = finalStats.cp / finalStats.cpEquiv;
+      }
+    }
+    if (!(nonNormalK > 0) || !Number.isFinite(nonNormalK)) nonNormalK = 1;
+
+    // ---- Discrete-step path (e.g. thermal pad @ 0.5 mm) --------------------
+    // The continuous solve above found the ideal |T| (idealMag). But an on-grid
+    // pad can only take multiples of `denomStep`. Since Cpk grows monotonically
+    // with |T| (spread ∝ 1/|T|), the engineering answer is the SMALLEST on-grid
+    // thickness whose measured Cpk still clears the target — the thinnest pad
+    // that passes. We scan a small grid around the snapped ideal (within bounds)
+    // and re-centre + re-measure each candidate at full N.
+    if (denomStep) {
+      const idealMag = Math.abs(candidate.denomNom);
+      // buildCandidate already applies the denominator's size-scaled tolerance
+      // ratio (when set) AND centres against it, so each grid candidate is
+      // evaluated at the window centre with the tolerance the sample generator
+      // will use.
+      const chk = (mag: number) => {
+        const c = buildCandidate(mag);
+        const st = evalCp(c.candidateItems, finalN);
+        const eq = equivReliable(st);
+        // Single consistent pass metric: the defect-based equivalent Cpk when the
+        // candidate has enough tail defects to resolve it, else the parametric
+        // Cpk DEFLATED by the measured non-normality factor k. Previously this
+        // flipped to RAW parametric when defects<8 — systematically optimistic,
+        // so a thickness could 'pass' while its true defect-based Cpk was below
+        // target and the result card (which reports the defect-based Cpk)
+        // contradicted the solver after Apply.
+        const cpk = eq ? st.cpEquiv : st.cp / nonNormalK;
+        return { mag, c, st, eq, cpk, tol: c.denomTol };
+      };
+      const denomB = solverBounds[denomId] || {};
+      const lo = (denomB.min != null && Number.isFinite(denomB.min)) ? denomB.min : denomStep;
+      const hi = (denomB.max != null && Number.isFinite(denomB.max)) ? denomB.max : idealMag + denomStep * 6;
+      // Build the on-grid ladder within [lo, hi].
+      const grid: number[] = [];
+      const first = Math.max(denomStep, Math.ceil((lo - 1e-9) / denomStep) * denomStep);
+      for (let m = first; m <= hi + 1e-9; m += denomStep) {
+        grid.push(parseFloat(m.toFixed(6)));
+        if (grid.length > 200) break; // safety
+      }
+      let chosen: ReturnType<typeof chk> | null = null;
+      let best: ReturnType<typeof chk> | null = null; // highest cpk if none passes
+      for (const m of grid) {
+        const r = chk(m);
+        if (best == null || r.cpk > best.cpk) best = r;
+        if (r.cpk >= targetCpk) { chosen = r; break; } // grid ascends → first pass = thinnest pass
+      }
+      const pick = chosen ?? best;
+      if (pick) {
+        const passed = chosen != null;
+        const dNote = passed
+          ? `分母已對齊 ${denomStep} 步階：此為能達標（Cpk ≥ ${targetCpk}）的最小合規厚度 ${Math.abs(pick.c.denomNom).toFixed(3)}（連續理想值 ${idealMag.toFixed(3)}）。`
+          : `在 ${denomStep} 步階與目前邊界內，沒有任何合規厚度能達到目標 Cpk；以下為格點上可達的最佳值。`;
+        return {
+          denomId,
+          denomNominal: pick.c.denomNom,
+          denomDisplay: Math.abs(pick.c.denomNom),
+          centeringId,
+          centeringNominal: pick.c.centeringNom,
+          centeringDisplay: pick.c.centeringNom == null ? null : Math.abs(pick.c.centeringNom),
+          predictedCpk: pick.cpk,
+          predictedCpkParam: pick.st.cp,
+          cpkIsEquiv: pick.eq,
+          predictedYield: pick.st.yieldRate,
+          centeredRatio: pick.st.mean,
+          targetCpk,
+          feasible: passed,
+          denomStep,
+          snappedToStep: true,
+          idealDenomDisplay: idealMag,
+          denomTolPlus: pick.tol ?? undefined,
+          denomTolMinus: pick.tol ?? undefined,
+          note: dNote
+        };
+      }
     }
 
     const useEquiv = equivReliable(finalStats);
@@ -1679,6 +2012,11 @@ export default function TolMaster() {
       centeredRatio: finalStats.mean,
       targetCpk,
       feasible,
+      // When a size-scaled tolerance ratio is set (even without a discrete
+      // step), buildCandidate evaluated the denominator at ±ratio·|T|; carry it
+      // so Apply writes the same tolerance the solve was based on.
+      denomTolPlus: candidate.denomTol ?? undefined,
+      denomTolMinus: candidate.denomTol ?? undefined,
       note
     };
   };
@@ -1700,14 +2038,33 @@ export default function TolMaster() {
 
   const handleApplySolverResult = () => {
     if (!solverResult) return;
+    // Preserve on-grid precision for a stepped denominator so the written-back
+    // value stays an exact multiple of the step (avoids 1.4999 vs 1.5 drift).
+    const denomWrite = solverResult.snappedToStep
+      ? solverResult.denomNominal
+      : parseFloat(solverResult.denomNominal.toFixed(3));
     const updates: Record<string, number> = {
-      [solverResult.denomId]: parseFloat(solverResult.denomNominal.toFixed(3))
+      [solverResult.denomId]: denomWrite
     };
     if (solverResult.centeringId && solverResult.centeringNominal != null) {
       updates[solverResult.centeringId] = parseFloat(solverResult.centeringNominal.toFixed(3));
     }
+    // A denominator with a size-scaled tolerance ratio (thermal pad ±10%, with
+    // or without a discrete step) carries a thickness-scaled ± tolerance; write
+    // it back so the table matches what the solver actually evaluated.
+    const denomTol = (solverResult.denomTolPlus != null)
+      ? { plus: solverResult.denomTolPlus, minus: solverResult.denomTolMinus ?? solverResult.denomTolPlus }
+      : null;
+    const denomTolId = solverResult.denomId;
     setProjects(prev => prev.map(p => p.id === activeTabId
-      ? { ...p, items: p.items.map(it => (it.id in updates ? { ...it, nominal: updates[it.id] } : it)) }
+      ? { ...p, items: p.items.map(it => {
+          if (!(it.id in updates)) return it;
+          const base = { ...it, nominal: updates[it.id] };
+          if (denomTol && it.id === denomTolId) {
+            return { ...base, tolPlus: denomTol.plus, tolMinus: denomTol.minus, isSymmetric: true };
+          }
+          return base;
+        }) }
       : p));
     setSolverResult(null);
     setSolverError(null);
@@ -1777,7 +2134,13 @@ export default function TolMaster() {
   const handleDeleteItem = (itemId: string) => {
     const updatedProjects = projects.map(p => {
       if (p.id === activeTabId) {
-        return { ...p, items: p.items.filter(i => i.id !== itemId) };
+        const remaining = p.items.filter(i => i.id !== itemId);
+        // If the deleted item was the compression target, clear the dangling
+        // reference. A stale target id passes the truthy-only guards downstream
+        // and makes every Monte Carlo sample NaN (denominator ≈ 0), which is
+        // then misdiagnosed as "FitShift interference". Clear it here at source.
+        const nextCompressionTargetId = p.compressionTargetId === itemId ? null : p.compressionTargetId;
+        return { ...p, items: remaining, compressionTargetId: nextCompressionTargetId };
       }
       return p;
     });
@@ -1900,6 +2263,13 @@ export default function TolMaster() {
                 isSymmetric: i.isSymmetric ?? (i.tolPlus === i.tolMinus)
               })) : []
             }));
+
+            // Validate compressionTargetId against the (possibly re-id'd) items
+            // so a dangling or FitShift reference from the file can't make every
+            // sample invalid. Single source of truth: normalizeCompressionTarget.
+            migrated.forEach((p: any) => {
+              p.compressionTargetId = normalizeCompressionTarget(p).compressionTargetId;
+            });
 
             console.log("Migrated data:", migrated);
             console.log("Setting projects...");
@@ -2106,7 +2476,8 @@ export default function TolMaster() {
   const compactStatMeta = simulationResult ? [
     { label: 'Upper spec', value: `${simulationFailureBreakdown.upperSpec.toFixed(5)}%` },
     { label: 'Lower spec', value: `${simulationFailureBreakdown.lowerSpec.toFixed(5)}%` },
-    { label: 'Fit interference', value: `${simulationFailureBreakdown.fitShiftInterference.toFixed(5)}%` }
+    { label: 'Fit interference', value: `${simulationFailureBreakdown.fitShiftInterference.toFixed(5)}%` },
+    { label: 'Ratio undefined', value: `${simulationFailureBreakdown.ratioUndefined.toFixed(5)}%` }
   ] : [];
 
   if (!activeProject) return <div className="p-10">Loading...</div>;
@@ -2125,6 +2496,10 @@ export default function TolMaster() {
             <div className="status-dot ml-1" />
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setIsHelpOpen(true)} className="btn btn--ghost">
+              <HelpCircle className="w-3.5 h-3.5" />
+              說明
+            </button>
             <button onClick={handleNewProject} className="btn btn--ghost">
               <FilePlus className="w-3.5 h-3.5" />
               New Project
@@ -2200,6 +2575,7 @@ export default function TolMaster() {
                 <button
                   onClick={handleOpenCreateFitShift}
                   className="btn btn--secondary"
+                  title="計算孔軸配合間隙，可考慮 MMC 偏移，結果可加入堆疊分析"
                 >
                   Fit Shift Calc
                 </button>
@@ -2255,14 +2631,16 @@ export default function TolMaster() {
 
               <div className="flex items-center gap-4 text-sm text-[var(--ink-2)]">
                 <div className="wc-readout hidden lg:inline-flex">
-                  <span className="label">Worst Case</span>
+                  <span className="label flex items-center gap-1">Worst Case <HelpTip content={help['toolbar.worstCase']} /></span>
                   <span className="text-[var(--ink-3)]">Max: <strong className="text-[var(--ink-1)] font-semibold">{wcResult.max}</strong></span>
                   <span className="text-[var(--ink-3)]">Min: <strong className="text-[var(--ink-1)] font-semibold">{wcResult.min}</strong></span>
                   <span className="text-[var(--ink-1)] font-semibold">±{wcResult.halfRange}</span>
                   <span className="text-[var(--line-strong)]">|</span>
                   <span className="text-[var(--ink-3)]">Center: <span className="text-[var(--ink-1)]">{wcResult.center}</span></span>
                   <span className="text-[var(--line-strong)]">|</span>
-                  <span className="text-[var(--ink-3)] cursor-help" title="RSS is shown as an equivalent ±3σ range based on normal approximation. Reference only, not a hard boundary.">RSS: ±{wcResult.rss}</span>
+                  <HelpTip content={help['toolbar.rss']} maxWidth={280}>
+                    <span className="text-[var(--ink-3)] cursor-help">RSS: ±{wcResult.rss}</span>
+                  </HelpTip>
                 </div>
 
                 <label className="flex items-center gap-2">
@@ -2299,11 +2677,11 @@ export default function TolMaster() {
                         <th className="px-2 py-2.5 w-10 text-center"></th>
                         <th className="px-4 py-2.5 w-16 text-center mono-label text-[var(--ink-3)]">Item</th>
                         <th className="px-4 py-2.5 w-48 text-left mono-label text-[var(--ink-3)]">Name</th>
-                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]">Nominal</th>
-                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]">Tol +</th>
-                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]">Tol −</th>
-                        <th className="px-4 py-2.5 w-24 text-center mono-label text-[var(--ink-3)]">Dist</th>
-                        <th className="px-4 py-2.5 w-24 text-center mono-label text-[var(--ink-3)]">CP</th>
+                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]"><span className="inline-flex items-center gap-1">Nominal <HelpTip content={help['table.nominal']} /></span></th>
+                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]"><span className="inline-flex items-center gap-1">Tol + <HelpTip content={help['table.tolPlus']} /></span></th>
+                        <th className="px-4 py-2.5 w-32 text-center mono-label text-[var(--ink-3)]"><span className="inline-flex items-center gap-1">Tol − <HelpTip content={help['table.tolMinus']} /></span></th>
+                        <th className="px-4 py-2.5 w-24 text-center mono-label text-[var(--ink-3)]"><span className="inline-flex items-center gap-1">Dist <HelpTip content={help['table.dist']} /></span></th>
+                        <th className="px-4 py-2.5 w-24 text-center mono-label text-[var(--ink-3)]"><span className="inline-flex items-center gap-1">CP <HelpTip content={help['table.cp']} /></span></th>
                         <th className="px-4 py-2.5 w-20"></th>
                       </tr>
                     </thead>
@@ -2356,7 +2734,7 @@ export default function TolMaster() {
                         <BarChart3 className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="text-[13px] font-semibold tracking-[0.01em] text-[var(--ink-1)]">Monte Carlo Analysis</div>
+                        <div className="text-[13px] font-semibold tracking-[0.01em] text-[var(--ink-1)] flex items-center gap-1">Monte Carlo Analysis <HelpTip content={help['feature.monteCarlo']} maxWidth={280} /></div>
                         <div className="mono-label text-[var(--ink-3)] mt-0.5">1D LINEAR STACK · N={activeProject.simulationCount.toLocaleString()} · {activeProject.items.length} DIMENSIONS</div>
                       </div>
                     </div>
@@ -2366,7 +2744,7 @@ export default function TolMaster() {
                     >
                       <Play className="w-4 h-4 fill-current" /> Run Analysis
                     </button>
-                    <button onClick={() => setIsDualPairModalOpen(true)} className="btn btn--secondary">
+                    <button onClick={() => setIsDualPairModalOpen(true)} className="btn btn--secondary" title="評估雙孔軸配合共享間隙時，因節距誤差造成的干涉機率">
                       <ArrowUpDown className="w-3.5 h-3.5" />
                       Dual-Pair Clearance
                     </button>
@@ -2377,11 +2755,37 @@ export default function TolMaster() {
                 <div className="flex items-center gap-2 bg-[var(--canvas)] p-2 rounded-[var(--r-2)] border border-[var(--line)]">
                   <span className="mono-label text-[var(--ink-3)] flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5" /> Compression Mode
+                    <HelpTip content={help['feature.compressionMode']} maxWidth={280} />
                   </span>
                   <button
                     onClick={() => {
-                      handleUpdateProjectField(activeTabId, 'isCompressionMode', !isCompressionMode);
-                      setSimulationResult(null); // Reset results on mode switch
+                      const nextMode = !isCompressionMode;
+                      // Mode switch changes the MEANING of samples (ratio-% vs
+                      // absolute) and of the spec limits. Clear results and cached
+                      // samples so nothing from the old mode is silently
+                      // reinterpreted under the new mode's labels.
+                      setSimulationResult(null);
+                      simulationSamplesRef.current = null;
+                      lastSimulatedProjectId.current = null;
+                      // Stash the CURRENT mode's spec window and restore the
+                      // target mode's previously-configured one instead of
+                      // wiping both directions (which permanently destroyed the
+                      // user's spec limits with no undo).
+                      const cache = specWindowCacheRef.current;
+                      const curKey = `${activeTabId}:${isCompressionMode ? 'comp' : 'abs'}`;
+                      const nextKey = `${activeTabId}:${nextMode ? 'comp' : 'abs'}`;
+                      cache[curKey] = {
+                        specLower: activeProject.specLower,
+                        specUpper: activeProject.specUpper,
+                        targetNominal: activeProject.targetNominal
+                      };
+                      const restored = cache[nextKey];
+                      setProjects(prev => prev.map(p => p.id === activeTabId
+                        ? { ...p, isCompressionMode: nextMode,
+                            specLower: restored?.specLower,
+                            specUpper: restored?.specUpper,
+                            targetNominal: restored?.targetNominal }
+                        : p));
                     }}
                     className={`toggle${isCompressionMode ? ' on' : ''}`}
                   >
@@ -2401,6 +2805,7 @@ export default function TolMaster() {
                   <h3 className="mono-label text-[var(--ink-3)] flex items-center gap-1.5">
                     <Settings className="w-3.5 h-3.5" />
                     Specification Settings
+                    <HelpTip content={help['spec.modes']} maxWidth={300} />
                   </h3>
                   {/* Mode Toggle */}
                   <div className="seg">
@@ -2444,11 +2849,11 @@ export default function TolMaster() {
                 {specInputMode === 'Manual' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
                     <label className="text-sm text-[var(--ink-2)] flex flex-col gap-1">
-                      {isCompressionMode ? "Lower Spec (LSL) (%)" : "Lower Spec (LSL)"}
+                      <span className="flex items-center gap-1">{isCompressionMode ? "Lower Spec (LSL) (%)" : "Lower Spec (LSL)"} <HelpTip content={help['spec.lsl']} /></span>
                       <input
                         type="number"
                         className="input right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder={wcResult.min.toString()}
+                        placeholder={isCompressionMode ? 'e.g. 9.5 (%)' : wcResult.min.toString()}
                         value={activeProject.specLower ?? ''}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
@@ -2458,11 +2863,11 @@ export default function TolMaster() {
                       />
                     </label>
                     <label className="text-sm text-[var(--ink-2)] flex flex-col gap-1">
-                      {isCompressionMode ? "Target Nominal (Optional) (%)" : "Target Nominal (Optional)"}
+                      <span className="flex items-center gap-1">{isCompressionMode ? "Target Nominal (Optional) (%)" : "Target Nominal (Optional)"} <HelpTip content={help['spec.targetNominal']} /></span>
                       <input
                         type="number"
                         className="input right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder={wcResult.center.toString()}
+                        placeholder={isCompressionMode ? 'e.g. 10 (%)' : wcResult.center.toString()}
                         value={activeProject.targetNominal ?? ''}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
@@ -2472,11 +2877,11 @@ export default function TolMaster() {
                       />
                     </label>
                     <label className="text-sm text-[var(--ink-2)] flex flex-col gap-1">
-                      {isCompressionMode ? "Upper Spec (USL) (%)" : "Upper Spec (USL)"}
+                      <span className="flex items-center gap-1">{isCompressionMode ? "Upper Spec (USL) (%)" : "Upper Spec (USL)"} <HelpTip content={help['spec.usl']} /></span>
                       <input
                         type="number"
                         className="input right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder={wcResult.max.toString()}
+                        placeholder={isCompressionMode ? 'e.g. 10.5 (%)' : wcResult.max.toString()}
                         value={activeProject.specUpper ?? ''}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
@@ -2648,6 +3053,46 @@ export default function TolMaster() {
                                   setSolverBounds(prev => ({ ...prev, [item.id]: { ...prev[item.id], max: isNaN(val) ? undefined : val } }));
                                 }}
                               />
+                              {/* step & tol% apply only to the denominator: the
+                                  solver reads solverBounds[denomId].step/tolRatio
+                                  and ignores them on any other free var. Gate the
+                                  inputs so a step on the centering item can't be
+                                  silently dropped (and write an off-grid nominal
+                                  to the table). */}
+                              {isDenom ? (
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="step"
+                                  disabled={!isFree}
+                                  title="離散步階：只有分母（壓縮目標）為固定規格（如 thermal pad 厚度以 0.5 為單位）時才填。留空 = 連續可調。"
+                                  className="input right w-20 disabled:opacity-40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  value={b.step ?? ''}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    setSolverBounds(prev => ({ ...prev, [item.id]: { ...prev[item.id], step: isNaN(val) ? undefined : val } }));
+                                  }}
+                                />
+                              ) : (
+                                <span className="w-20 shrink-0" />
+                              )}
+                              {isDenom ? (
+                                <input
+                                  type="number"
+                                  step="1"
+                                  placeholder="tol%"
+                                  disabled={!isFree}
+                                  title="比例公差（%）：分母的公差若隨尺寸縮放才填，例如 thermal pad 厚度的 ±10% 就填 10。彈簧、金屬件等有固定公差者請留空（掃描時沿用該項原本的公差）。"
+                                  className="input right w-20 disabled:opacity-40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  value={b.tolRatio ?? ''}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    setSolverBounds(prev => ({ ...prev, [item.id]: { ...prev[item.id], tolRatio: isNaN(val) ? undefined : val } }));
+                                  }}
+                                />
+                              ) : (
+                                <span className="w-20 shrink-0" />
+                              )}
                             </div>
                           );
                         })}
@@ -2664,7 +3109,7 @@ export default function TolMaster() {
                         {solverBusy ? 'Solving…' : 'Solve ▸'}
                       </button>
                       <span className="text-xs text-[var(--ink-3)]">
-                        * 分母（壓縮目標）控制散佈、另一顆自由變數負責對中；min/max 以顯示值（絕對量）為界，可留空。
+                        * 分母（壓縮目標）控制散佈、另一顆自由變數負責對中；min/max 以顯示值（絕對量）為界，可留空。step 只有固定規格件（如 thermal pad 以 0.5 為單位）才填，solver 會解出達標的最小合規厚度。
                       </span>
                     </div>
 
@@ -2720,22 +3165,34 @@ export default function TolMaster() {
 
             {simulationResult ? (
               <div className="space-y-8">
+                {isCompressionMode && simulationResult.compressionTargetStraddlesZero && (
+                  <div className="flex items-start gap-2 rounded-[var(--r-2)] border border-[var(--warning)]/35 bg-[var(--surface-subtle)] p-3 text-[12px] leading-relaxed text-[var(--ink-1)]">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]" />
+                    <span>壓縮目標的分佈跨越 0，比值可能發散或變號，使 Mean/σ、直方圖與 Equiv. Cpk 不可靠。請確認分母尺寸不會接近 0，或改選其他壓縮目標。</span>
+                  </div>
+                )}
                 {/* Key Stats Row */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {/* Yield card */}
                   <div className="card stat">
                     <div className={`stripe ${simulationResult.yieldRate > 99.7 ? 'success' : 'warning'}`} />
                     <div className="stat-head">
-                      <span className="label">Yield rate</span>
+                      <span className="label flex items-center gap-1">Yield rate <HelpTip content={help['result.yield']} /></span>
                     </div>
                     <div className="stat-val">{simulationResult.yieldRate.toFixed(5)}<span className="unit">%</span></div>
                     {simulationFitShiftInterferenceCount > 0 && (
                       <div className="text-[11px] text-[var(--ink-3)] leading-relaxed">Includes FitShift interference failures.</div>
                     )}
+                    {simulationRatioUndefinedCount > 0 && (
+                      <div className="text-[11px] text-[var(--ink-3)] leading-relaxed">Includes ratio-undefined samples (compression target ≈ 0).</div>
+                    )}
                     <div className="pt-2 border-t border-[var(--line)]">
                       <div className="label mb-1">Failure Breakdown</div>
                       <div className="stat-kv">
                         <span className="k">FitShift</span><span className="v">{simulationFailureBreakdown.fitShiftInterference.toFixed(5)}%</span>
+                        {simulationRatioUndefinedCount > 0 && (
+                          <><span className="k">Ratio undef.</span><span className="v">{simulationFailureBreakdown.ratioUndefined.toFixed(5)}%</span></>
+                        )}
                         <span className="k">Upper</span><span className="v">{simulationFailureBreakdown.upperSpec.toFixed(5)}%</span>
                         <span className="k">Lower</span><span className="v">{simulationFailureBreakdown.lowerSpec.toFixed(5)}%</span>
                       </div>
@@ -2745,35 +3202,28 @@ export default function TolMaster() {
                   {/* PPM card */}
                   <div className="card stat">
                     <div className="stat-head">
-                      <span className="label">Defects</span>
+                      <span className="label flex items-center gap-1">Defects <HelpTip content={help['result.ppm']} /></span>
                       <span className="meta mono">PPM</span>
                     </div>
                     <div className="stat-val">{Math.round(simulationResult.ppm).toLocaleString()}</div>
                   </div>
 
                   {/* Cpk card with Tooltip */}
-                  <div className="card stat relative group">
+                  <div className="card stat relative">
                     {simulationResult.cp >= 1.33 && <div className="stripe success" />}
                     <div className="stat-head">
-                      <span className="label flex items-center gap-1">Equiv. Cpk <Info className="w-3.5 h-3.5 cursor-help opacity-60" /></span>
+                      <span className="label flex items-center gap-1">
+                        Equiv. Cpk
+                        <HelpTip content={simulationResult.cpIsLowerBound ? help['result.equivCpkLowerBound'] : help['result.equivCpk']} maxWidth={280} />
+                      </span>
                     </div>
                     <div className="stat-val">{simulationResult.cpIsLowerBound ? '>' : ''}{simulationResult.cp.toFixed(2)}</div>
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-3 bg-[var(--chrome)] text-white text-xs rounded-[var(--r-2)] z-50 leading-relaxed pointer-events-none shadow-lg">
-                      <strong className="block mb-1">說明：</strong>
-                      此值為「等效 Cpk」，是從實際良率反推得出。<br /><br />
-                      當堆疊包含非常態分佈或 FitShift interference 失敗時，此值比傳統 Cpk 更能反映實際過程能力。
-                      {simulationResult.cpIsLowerBound && (
-                        <><br /><br />「&gt;」表示本次模擬未觀察到任何不良品，此為 rule-of-three（3/N）95% 信賴下界；實際能力可能更高，需更多迭代才能解析。</>
-                      )}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--chrome)]"></div>
-                    </div>
                   </div>
 
                   {/* Mean/StdDev card */}
                   <div className="card stat">
                     <div className="stat-head">
-                      <span className="label">Mean / StdDev</span>
+                      <span className="label flex items-center gap-1">Mean / StdDev <HelpTip content={help['result.meanStdDev']} /></span>
                     </div>
                     {simulationValidSampleCount > 0 ? (
                       <div className="stat-kv">
@@ -2789,7 +3239,7 @@ export default function TolMaster() {
                   {/* Simulated Range card */}
                   <div className={`card stat${isCompressionMode ? ' col-span-2 lg:col-span-1' : ''}`}>
                     <div className="stat-head">
-                      <span className="label">Simulated Range</span>
+                      <span className="label flex items-center gap-1">Simulated Range <HelpTip content={help['result.simulatedRange']} /></span>
                     </div>
                     {isCompressionMode && simulationResult.gapStats ? (
                       <>
@@ -2814,11 +3264,12 @@ export default function TolMaster() {
                     )}
                   </div>
                 </div>
+
                 <div className="charts-grid">
                   {/* Histogram */}
                   <div className="card chart-card">
                     <div className="chart-head">
-                      <div className="chart-title">Distribution</div>
+                      <div className="chart-title flex items-center gap-1">Distribution <HelpTip content={help['result.histogram']} /></div>
                       <div className="chart-legend">
                         {activeProject.targetNominal !== undefined && <span className="text-[var(--accent)] text-[11px]">Target: {activeProject.targetNominal}</span>}
                       </div>
@@ -2840,8 +3291,8 @@ export default function TolMaster() {
                   <div className="card chart-card">
                     <div className="chart-head">
                       <div>
-                        <div className="text-[13px] font-semibold text-[var(--ink-1)]">Contribution Analysis</div>
-                        <div className="meta" style={{ marginTop: 2 }}>Variance share, σ²</div>
+                        <div className="text-[13px] font-semibold text-[var(--ink-1)] flex items-center gap-1">Contribution Analysis <HelpTip content={help['result.contribution']} /></div>
+                        <div className="meta" style={{ marginTop: 2 }}>Variance share, σ²{isCompressionMode ? ' · absolute stack (does not reflect compression-ratio leverage)' : ''}</div>
                       </div>
                     </div>
                     <div className="chart-body">
@@ -2869,7 +3320,12 @@ export default function TolMaster() {
         <Modal
           isOpen={isGapModalOpen}
           onClose={handleCloseFitShiftModal}
-          title={fitShiftEditor.mode === 'edit' ? "Edit Hole / Shaft Fit Shift" : "Hole / Shaft Fit Shift Calculator"}
+          title={
+            <span className="flex items-center gap-1">
+              {fitShiftEditor.mode === 'edit' ? "Edit Hole / Shaft Fit Shift" : "Hole / Shaft Fit Shift Calculator"}
+              <HelpTip content={help['fitshift.overview']} maxWidth={280} />
+            </span>
+          }
         >
           <div className="space-y-4">
             <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[var(--r-2)] p-3 text-xs text-[var(--ink-1)] mb-2">
@@ -2886,7 +3342,7 @@ export default function TolMaster() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex justify-between items-center border-b border-[var(--line)] pb-1.5">
-                  <span className="mono-label text-[var(--ink-2)]">Hole (孔)</span>
+                  <span className="mono-label text-[var(--ink-2)] flex items-center gap-1">Hole (孔) <HelpTip content={help['fitshift.hole']} maxWidth={240} /></span>
                   <button
                     onClick={() => setGapInputs(prev => ({ ...prev, holeSymmetric: !prev.holeSymmetric, holeTolMinus: !prev.holeSymmetric ? prev.holeTolMinus : prev.holeTolPlus }))}
                     className="p-1 rounded hover:bg-[var(--surface-subtle)] text-[var(--ink-3)] hover:text-[var(--accent)] transition-colors"
@@ -2929,7 +3385,7 @@ export default function TolMaster() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center border-b border-[var(--line)] pb-1.5">
-                  <span className="mono-label text-[var(--ink-2)]">Shaft (軸)</span>
+                  <span className="mono-label text-[var(--ink-2)] flex items-center gap-1">Shaft (軸) <HelpTip content={help['fitshift.shaft']} maxWidth={240} /></span>
                   <button
                     onClick={() => setGapInputs(prev => ({ ...prev, shaftSymmetric: !prev.shaftSymmetric, shaftTolMinus: !prev.shaftSymmetric ? prev.shaftTolMinus : prev.shaftTolPlus }))}
                     className="p-1 rounded hover:bg-[var(--surface-subtle)] text-[var(--ink-3)] hover:text-[var(--accent)] transition-colors"
@@ -2973,7 +3429,7 @@ export default function TolMaster() {
 
             <div className="card pad">
               <div className="stat-kv">
-                <span className="k">Max Gap</span><span className="v">{((gapInputs.holeNom + gapInputs.holeTolPlus) - (gapInputs.shaftNom - gapInputs.shaftTolMinus)).toFixed(3)}</span>
+                <span className="k flex items-center gap-1">Max Gap <HelpTip content={help['fitshift.gapRange']} maxWidth={240} /></span><span className="v">{((gapInputs.holeNom + gapInputs.holeTolPlus) - (gapInputs.shaftNom - gapInputs.shaftTolMinus)).toFixed(3)}</span>
                 <span className="k">Min Gap</span><span className="v">{((gapInputs.holeNom - gapInputs.holeTolMinus) - (gapInputs.shaftNom + gapInputs.shaftTolPlus)).toFixed(3)}</span>
               </div>
             </div>
@@ -3006,6 +3462,10 @@ export default function TolMaster() {
           isOpen={isDualPairModalOpen}
           onClose={() => setIsDualPairModalOpen(false)}
         />
+
+        {/* Help Modal */}
+        <HelpModal isOpen={isHelpOpen} onClose={handleCloseHelp} />
+
         {/* Status Bar */}
         <footer className="footer">
           <span className="label">TolMaster v2.8</span>
