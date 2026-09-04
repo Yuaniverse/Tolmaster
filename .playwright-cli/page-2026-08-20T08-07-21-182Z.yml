@@ -1,0 +1,307 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: τ
+      - generic [ref=e7]: TolMaster
+      - link "v2.9.2" [ref=e8] [cursor=pointer]:
+        - /url: https://smartmd.wnc.com.tw/post_list2?topic_id=13279
+    - generic [ref=e10]:
+      - button "說明" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+        - text: 說明
+      - button "New Project" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+        - text: New Project
+      - button "Screenshot" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+        - text: Screenshot
+      - generic [ref=e23] [cursor=pointer]:
+        - img [ref=e24]
+        - text: Load
+      - button "Save" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+        - text: Save
+  - generic [ref=e32]:
+    - complementary [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]: Sheets
+        - button "Collapse project sidebar" [expanded] [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+      - navigation "Project sheets" [ref=e39]:
+        - generic [ref=e40] [cursor=pointer]:
+          - button "Reorder project Stack-up 1" [ref=e41]:
+            - img [ref=e42]
+          - textbox [ref=e49]: Stack-up 1
+          - button "Duplicate Sheet" [ref=e51]:
+            - img [ref=e52]
+        - button "Add project sheet" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+      - separator "Resize project sidebar" [ref=e57]
+    - status [ref=e58]
+    - main [ref=e59]:
+      - generic [ref=e60]:
+        - button "Stack-Up Diagram" [ref=e62]:
+          - img [ref=e63]
+          - generic [ref=e67]: Stack-Up Diagram
+        - generic [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e74]: ＋ 加入公差堆疊圖 Stack-Up Diagram
+          - generic [ref=e75]: Ctrl+V 貼上、拖曳圖片，或點擊上傳
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - button "Add Dimension" [ref=e79] [cursor=pointer]:
+              - img [ref=e80]
+              - text: Add Dimension
+            - button "Fit Shift Calc" [ref=e81] [cursor=pointer]
+            - button "Invert All" [ref=e82] [cursor=pointer]:
+              - img [ref=e83]
+              - text: Invert All
+            - button "Reset" [ref=e86] [cursor=pointer]:
+              - img [ref=e87]
+              - text: Reset
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - generic [ref=e94]:
+                - text: Worst Case
+                - img [ref=e96]
+              - generic [ref=e98]:
+                - text: "Max:"
+                - strong [ref=e99]: "0.75"
+              - generic [ref=e100]:
+                - text: "Min:"
+                - strong [ref=e101]: "0.25"
+              - generic [ref=e102]: ±0.25
+              - generic [ref=e103]: "|"
+              - generic [ref=e104]: "Center: 0.5"
+              - generic [ref=e105]: "|"
+              - generic [ref=e107]: "RSS: ±0.1429"
+            - generic [ref=e108]:
+              - text: "Simulations:"
+              - combobox "Simulations:" [ref=e109] [cursor=pointer]:
+                - option "100k (Fast)"
+                - option "500k (Balanced)"
+                - option "1M (Standard)"
+                - option "5M (High Precision)" [selected]
+                - option "10M (Ultra)"
+        - generic [ref=e111]:
+          - table [ref=e112]:
+            - rowgroup [ref=e113]:
+              - row "Item Name Nominal Tol + Tol − Dist CP" [ref=e114]:
+                - columnheader [ref=e115]
+                - columnheader "Item" [ref=e116]
+                - columnheader "Name" [ref=e117]
+                - columnheader "Nominal" [ref=e118]:
+                  - generic [ref=e119]:
+                    - text: Nominal
+                    - img [ref=e121]
+                - columnheader "Tol +" [ref=e123]:
+                  - generic [ref=e124]:
+                    - text: Tol +
+                    - img [ref=e126]
+                - columnheader "Tol −" [ref=e128]:
+                  - generic [ref=e129]:
+                    - text: Tol −
+                    - img [ref=e131]
+                - columnheader "Dist" [ref=e133]:
+                  - generic [ref=e134]:
+                    - text: Dist
+                    - img [ref=e136]
+                - columnheader "CP" [ref=e138]:
+                  - generic [ref=e139]:
+                    - text: CP
+                    - img [ref=e141]
+                - columnheader [ref=e143]
+            - rowgroup [ref=e144]:
+              - row "1 Part A + 10 ± 0.1 Normal Mean Drift" [ref=e145]:
+                - cell [ref=e146]:
+                  - button [ref=e147]:
+                    - img [ref=e148]
+                - cell "1" [ref=e155]
+                - cell "Part A" [ref=e156]:
+                  - textbox "Part Name" [ref=e157]: Part A
+                - cell "+ 10" [ref=e158]:
+                  - generic [ref=e159]:
+                    - button "+" [ref=e160] [cursor=pointer]
+                    - textbox [ref=e161]: "10"
+                - cell "± 0.1" [ref=e162]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164]:
+                      - generic: ±
+                      - textbox [ref=e165]: "0.1"
+                    - button "現在是對稱公差 (±)。點擊解鎖以輸入非對稱公差。" [ref=e166] [cursor=pointer]:
+                      - img [ref=e167]
+                - cell "Normal Mean Drift" [ref=e170]:
+                  - generic [ref=e171]:
+                    - generic [ref=e172]:
+                      - combobox [ref=e173] [cursor=pointer]:
+                        - option "Normal" [selected]
+                        - option "Normal (Sort)"
+                        - option "Uniform"
+                      - img [ref=e175]
+                    - generic [ref=e179]:
+                      - generic [ref=e180] [cursor=pointer]: Mean Drift
+                      - img [ref=e182]
+                - cell [ref=e185]:
+                  - generic [ref=e186]:
+                    - spinbutton [ref=e187]
+                    - img [ref=e189]
+                    - button "SPC Calibration - Import Real Data" [ref=e191] [cursor=pointer]:
+                      - img [ref=e192]
+                - cell [ref=e194]:
+                  - button "Delete item" [ref=e196] [cursor=pointer]:
+                    - img [ref=e197]
+              - row "2 Part B - 9.5 ± 0.05 Normal Mean Drift" [ref=e200]:
+                - cell [ref=e201]:
+                  - button [ref=e202]:
+                    - img [ref=e203]
+                - cell "2" [ref=e210]
+                - cell "Part B" [ref=e211]:
+                  - textbox "Part Name" [ref=e212]: Part B
+                - cell "- 9.5" [ref=e213]:
+                  - generic [ref=e214]:
+                    - button "-" [ref=e215] [cursor=pointer]
+                    - textbox [ref=e216]: "9.5"
+                - cell "± 0.05" [ref=e217]:
+                  - generic [ref=e218]:
+                    - generic [ref=e219]:
+                      - generic: ±
+                      - textbox [ref=e220]: "0.05"
+                    - button "現在是對稱公差 (±)。點擊解鎖以輸入非對稱公差。" [ref=e221] [cursor=pointer]:
+                      - img [ref=e222]
+                - cell "Normal Mean Drift" [ref=e225]:
+                  - generic [ref=e226]:
+                    - generic [ref=e227]:
+                      - combobox [ref=e228] [cursor=pointer]:
+                        - option "Normal" [selected]
+                        - option "Normal (Sort)"
+                        - option "Uniform"
+                      - img [ref=e230]
+                    - generic [ref=e234]:
+                      - generic [ref=e235] [cursor=pointer]: Mean Drift
+                      - img [ref=e237]
+                - cell [ref=e240]:
+                  - generic [ref=e241]:
+                    - spinbutton [ref=e242]
+                    - img [ref=e244]
+                    - button "SPC Calibration - Import Real Data" [ref=e246] [cursor=pointer]:
+                      - img [ref=e247]
+                - cell [ref=e249]:
+                  - button "Delete item" [ref=e251] [cursor=pointer]:
+                    - img [ref=e252]
+              - row "3 Fit Shift (H10/S9.9) FIT SHIFT Dynamic fit shift 0.000 max shift ±0.100 Uniform -" [ref=e255]:
+                - cell [ref=e256]:
+                  - button [ref=e257]:
+                    - img [ref=e258]
+                - cell "3" [ref=e265]
+                - cell "Fit Shift (H10/S9.9) FIT SHIFT Dynamic fit shift" [ref=e266]:
+                  - generic [ref=e267]:
+                    - generic [ref=e268]:
+                      - textbox "Fit Name" [ref=e269]: Fit Shift (H10/S9.9)
+                      - generic [ref=e270]: FIT SHIFT
+                    - generic [ref=e271]: Dynamic fit shift
+                - cell "0.000" [ref=e272]:
+                  - generic [ref=e274]: "0.000"
+                - cell "max shift ±0.100" [ref=e275]:
+                  - generic [ref=e276]:
+                    - generic [ref=e277]: max shift
+                    - generic [ref=e278]: ±0.100
+                - cell "Uniform" [ref=e279]:
+                  - combobox [ref=e280] [cursor=pointer]:
+                    - option "Uniform" [selected]
+                    - option "Beta(0.5, 0.5)"
+                - cell "-" [ref=e281]:
+                  - generic [ref=e282]: "-"
+                - cell [ref=e283]:
+                  - generic [ref=e284]:
+                    - button "Edit Fit Shift" [ref=e285] [cursor=pointer]:
+                      - img [ref=e286]
+                    - button "Delete item" [ref=e289] [cursor=pointer]:
+                      - img [ref=e290]
+          - status [ref=e293]
+      - generic [ref=e294]:
+        - generic [ref=e295]:
+          - generic [ref=e296]:
+            - generic [ref=e298]:
+              - generic [ref=e299]:
+                - img [ref=e301]
+                - generic [ref=e303]:
+                  - generic [ref=e304]:
+                    - text: Monte Carlo Analysis
+                    - img [ref=e306]
+                  - generic [ref=e308]: 1D LINEAR STACK · N=5,000,000 · 3 DIMENSIONS
+              - button "Run Analysis" [ref=e309] [cursor=pointer]:
+                - img [ref=e310]
+                - text: Run Analysis
+              - button "Dual-Pair Clearance" [ref=e312] [cursor=pointer]:
+                - img [ref=e313]
+                - text: Dual-Pair Clearance
+            - generic [ref=e316]:
+              - generic [ref=e317]:
+                - img [ref=e318]
+                - text: Compression Mode
+                - img [ref=e323]
+              - button [ref=e325] [cursor=pointer]
+          - generic [ref=e326]:
+            - generic [ref=e327]:
+              - heading "Specification Settings" [level=3] [ref=e328]:
+                - img [ref=e329]
+                - text: Specification Settings
+                - img [ref=e333]
+              - generic [ref=e335]:
+                - button "Manual specs" [ref=e336] [cursor=pointer]
+                - button "Target Cpk" [ref=e337] [cursor=pointer]
+            - generic [ref=e338]:
+              - generic [ref=e339]:
+                - generic [ref=e340]:
+                  - text: Lower Spec (LSL)
+                  - img [ref=e342]
+                - spinbutton "Lower Spec (LSL)" [ref=e344]
+              - generic [ref=e345]:
+                - generic [ref=e346]:
+                  - text: Target Nominal (Optional)
+                  - img [ref=e348]
+                - spinbutton "Target Nominal (Optional)" [ref=e350]
+              - generic [ref=e351]:
+                - generic [ref=e352]:
+                  - text: Upper Spec (USL)
+                  - img [ref=e354]
+                - spinbutton "Upper Spec (USL)" [ref=e356]
+        - generic [ref=e357]:
+          - img [ref=e358]
+          - paragraph [ref=e360]: Ready to Simulate
+          - paragraph [ref=e361]: Enter specifications and click "Run Analysis"
+  - generic [ref=e363]:
+    - generic [ref=e364]:
+      - generic [ref=e365]:
+        - img [ref=e366]
+        - heading "TolMaster 說明" [level=3] [ref=e369]
+      - button "關閉" [ref=e370] [cursor=pointer]:
+        - img [ref=e371]
+    - generic [ref=e375]:
+      - button "快速上手" [ref=e376] [cursor=pointer]
+      - button "名詞解釋" [ref=e377] [cursor=pointer]
+      - button "分佈類型" [ref=e378] [cursor=pointer]
+      - button "功能指南" [ref=e379] [cursor=pointer]
+      - button "結果判讀" [ref=e380] [cursor=pointer]
+    - list [ref=e382]:
+      - listitem [ref=e383]:
+        - strong [ref=e384]: 新增尺寸項目
+        - text: — 點擊「Add Dimension」，輸入每個尺寸的 Nominal、正負公差與分佈類型（Dist）。
+      - listitem [ref=e385]:
+        - strong [ref=e386]: 設定製程能力（Cp）
+        - text: — 若有實測資料，用該行的 SPC 圖示匯入並校正；沒有的話可先用 1.0～1.33 作保守假設。
+      - listitem [ref=e387]:
+        - strong [ref=e388]: 輸入規格界限
+        - text: — 於下方 Specification Settings 輸入 LSL/USL，或用 Target Cpk 模式自動反推。
+      - listitem [ref=e389]:
+        - strong [ref=e390]: 執行模擬
+        - text: — 點擊「Run Analysis」，程式會依各尺寸的分佈隨機抽樣並組合，計算整體良率與 Cpk。
+      - listitem [ref=e391]:
+        - strong [ref=e392]: 判讀結果
+        - text: — 查看結果卡片與模擬結果下方的解讀說明；若 Cpk 偏低，參考 Contribution Analysis 找出主要變異來源優先改善。
+  - contentinfo [ref=e393]:
+    - button "TolMaster v2.9.2" [ref=e394]
+    - generic [ref=e396]: Engine · Monte Carlo
+    - generic [ref=e398]: Ready
+    - generic [ref=e399]: "@HPY"

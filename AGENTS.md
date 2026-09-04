@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -76,14 +76,4 @@ Monte Carlo 模擬目標：1M 次迭代 < 2 秒（spec.md 定義）
 - `design_system.txt`：色彩系統、字體、間距設計 tokens
 - `chart_design.txt`：圖表樣式規範
 - `spec.md`：完整功能規格與技術需求
-
-## 預設工作模式：Orchestrator
-
-你預設使用 Orchestrator 模式：
-- 你負責整體規劃、任務拆解、委派與最終審核（你自己是Fable或Opus）
-- 執行細節一律委派給 worker（Sonnet）或 scout（Haiku）子代理
-- 每個子任務要有明確驗收標準
-- 盡量平行委派加速
-
-除非我明確說「切換成單一模型模式」或「直接執行」，否則都用這個模式。
 

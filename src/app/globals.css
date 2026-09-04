@@ -406,6 +406,180 @@ button, input, select, textarea { font: inherit; }
 }
 .tab-add:hover { color: var(--ink-1); background: var(--surface-subtle); }
 
+/* Project navigation wrapper is layout-neutral on narrow screens. */
+.project-sidebar {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-sidebar-controls,
+.project-sidebar-resize-handle {
+  display: none;
+}
+
+body.project-sidebar-resizing,
+body.project-sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Desktop project rail; narrow screens retain the original horizontal tabs. */
+@media (min-width: 768px) {
+  .project-sidebar {
+    width: var(--project-sidebar-width, 192px);
+    min-width: 160px;
+    max-width: 420px;
+    height: calc(100vh - 48px);
+    flex: 0 0 var(--project-sidebar-width, 192px);
+    align-self: flex-start;
+    position: sticky;
+    top: 48px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    transition: width .16s ease, flex-basis .16s ease;
+  }
+
+  .project-sidebar--resizing {
+    transition: none;
+  }
+
+  .project-sidebar--collapsed {
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    flex-basis: 48px;
+  }
+
+  .project-sidebar-controls {
+    height: 40px;
+    padding: 0 var(--s-2) 0 var(--s-3);
+    display: flex;
+    flex: 0 0 40px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .project-sidebar-label {
+    color: var(--ink-3);
+    font: 500 var(--t-label)/1 var(--mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .project-sidebar-toggle {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-2);
+    color: var(--ink-3);
+    background: transparent;
+    cursor: pointer;
+    transition: color .12s, background .12s;
+  }
+
+  .project-sidebar-toggle:hover {
+    color: var(--ink-1);
+    background: var(--surface-subtle);
+  }
+
+  .project-sidebar-toggle:focus-visible,
+  .project-sidebar-resize-handle:focus-visible {
+    outline: none;
+    box-shadow: var(--ring);
+  }
+
+  .project-tabs {
+    width: 100%;
+    min-height: 0;
+    padding: var(--s-2);
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-bottom: 0;
+  }
+
+  .project-tabs .tab {
+    width: 100%;
+    height: 38px;
+    flex-shrink: 0;
+    padding: 0 8px;
+    justify-content: space-between;
+    border-left: 2px solid transparent;
+    border-bottom: 0;
+    border-radius: var(--r-2);
+  }
+
+  .project-tabs .tab.active {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-left-color: var(--accent);
+    background: var(--surface-subtle);
+  }
+
+  .project-tabs .project-tab-name {
+    width: 100%;
+    text-align: left;
+  }
+
+  .project-tabs .tab-add {
+    width: 100%;
+    min-height: 32px;
+    flex-shrink: 0;
+    margin-bottom: 0;
+  }
+
+  .project-sidebar--collapsed .project-sidebar-controls {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .project-sidebar--collapsed .project-sidebar-label {
+    display: none;
+  }
+
+  .project-sidebar--collapsed .project-tabs {
+    display: none;
+  }
+
+  .project-sidebar-resize-handle {
+    display: block;
+    width: 20px;
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: -10px;
+    bottom: 0;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .project-sidebar-resize-handle::after {
+    content: '';
+    width: 2px;
+    position: absolute;
+    top: 0;
+    right: 9px;
+    bottom: 0;
+    background: transparent;
+    transition: background .12s;
+  }
+
+  .project-sidebar-resize-handle:hover::after,
+  .project-sidebar-resize-handle:focus-visible::after,
+  .project-sidebar--resizing .project-sidebar-resize-handle::after {
+    background: var(--accent);
+  }
+}
+
 /* ─── SIGN TOGGLE (nominal +/−) ──────────────────────────────── */
 .sign {
   display: flex; align-items: center; justify-content: center;

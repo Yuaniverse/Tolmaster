@@ -63,9 +63,9 @@ export type HelpKey =
   | 'glossary.montecarlo';
 
 export const help: Record<HelpKey, string> = {
-  'table.nominal': 'Nominal（公稱尺寸）\n該尺寸的設計目標值，不含公差。堆疊模擬時各項 Nominal 會依正負號相加，得出總成的理論中心值。',
-  'table.tolPlus': 'Tol +（正向公差）\n允許尺寸超出 Nominal 的最大量（上偏差）。',
-  'table.tolMinus': 'Tol −（負向公差）\n允許尺寸低於 Nominal 的最大量（下偏差，輸入正值即可，程式會自動視為負方向）。',
+  'table.nominal': 'Nominal（公稱尺寸）\n該尺寸的設計目標值，不含公差。左側的 +/− 按鈕代表堆疊方向，不影響尺寸本身；堆疊模擬時各項會依方向相加，得出總成的理論中心值。',
+  'table.tolPlus': 'Tol +（正向公差）\n允許尺寸超出 Nominal 的最大量（上偏差）。公差是相對於「顯示的尺寸值」，與方向按鈕無關：方向為 − 的項目，Tol + 會讓它在堆疊中往更負的方向延伸。',
+  'table.tolMinus': 'Tol −（負向公差）\n允許尺寸低於 Nominal 的最大量（下偏差，輸入正值即可，程式會自動視為負方向）。同樣相對於「顯示的尺寸值」，與方向按鈕無關。',
   'table.dist': 'Dist（分佈類型）\n決定 Monte Carlo 抽樣時，這個尺寸在公差範圍內如何分佈（常態、篩選後常態、均勻…）。點選右側下拉選單查看各類型說明。',
   'table.cp': 'Cp（製程能力指數）\n用於換算模擬用的標準差：σ = (公差/2) / (3 × Cp)。\nCp 越大代表製程越穩定、變異越集中在公差中心附近；未實測時可先用 1.0～1.33 作保守假設。',
   'table.cpNormalSort': 'Cp（篩選前製程能力）\nNormal(Sort) 會先用常態分佈抽樣，再把超出公差的樣本剔除（模擬全檢）。因此這裡輸入的 Cp 是「篩選前」的製程能力，成品實際變異會比此值換算出的 σ 更小。',

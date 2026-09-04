@@ -1,0 +1,1 @@
+Read Claude.md first

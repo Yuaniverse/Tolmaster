@@ -3,6 +3,46 @@
 All notable changes to **TolMaster** are recorded here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions use the `vMAJOR.MINOR.PATCH` scheme already used in commit prefixes.
 
+## [2.9.2] — 2026-08-20
+
+### Fixed — 方向為負的項目，非對稱公差往反方向計算
+
+- 問題：`nominal` 的正負號代表堆疊方向，但 UI 顯示與編輯的是量值（|nominal|），`Tol +` / `Tol −` 也是掛在該量值上。舊實作直接把 `tolPlus` 加在帶號的 nominal 上（`nominal + tolPlus`），使方向為 − 的項目公差往反方向展開：`− 13.2 (+0.6/−0)` 實體尺寸為 13.2–13.8，堆疊貢獻應為 −13.8…−13.2，卻被算成 −13.2…−12.6。對稱公差（±）時兩側相同，誤差被完全遮蔽，因此長期未被發現。
+- 修正：新增 `signedStats()` / `signedMeanOffset()`，統一以方向投影計算有效平均值與上下界（方向為 − 時，`tolPlus`/`tolMinus` 在堆疊空間互換）。Monte Carlo 抽樣參數、Worst Case 堆疊、Compression Mode 求解器的 `effOffset` 全部改走此處。
+- Empirical 分佈抽樣：實測偏差屬於實體（量值）空間，改為先投影到堆疊方向再加上帶號平均值（`sign * (sample − model.mean) + mean`）。
+- SPC 匯入（`SPCModal`）：實測資料通常以正值貼入，舊邏輯把 `stats.mean` 原樣寫回會讓負方向項目靜默翻向。改為投影到項目既有方向，並套用同一套方向感知的公差偏移。
+- 說明文案（`helpContent.ts`）：`table.nominal` / `table.tolPlus` / `table.tolMinus` 補述「公差相對於顯示的尺寸值，與方向按鈕無關」。
+
+#### 影響範圍
+
+既有存檔中若含「方向為 −」且「非對稱公差」的項目，重新開啟後 Worst Case 與 Monte Carlo 結果會與 2.9.1 不同 —— 這是修正而非退步。全對稱公差的專案結果完全不變。
+
+#### 驗證
+
+- 案例（Brick − 13.2 +0.6/−0、TIM − 3.5 ±0.35、Height + 15.425 ±0.1）：Max / Min / Center 由 −0.225 / −1.725 / −0.975 修正為 −0.825 / −2.325 / −1.575；半寬 ±0.75 不變。
+- Monte Carlo（N=1M）：μ = −1.575，與 Worst Case 中心一致。
+- 回歸（全對稱：+10 ±0.1、−9.5 ±0.05、−0.3 ±0.02）：維持 Max 0.37 / Min 0.03 / ±0.17，與修正前相同。
+- Invert All：全數反號後為 Max 2.325 / Min 0.825，寬度不變。
+- `npm run build`：通過；Edge 對最終 `dist-single` smoke test 通過。
+- 版本號已在 `package.json`、`package-lock.json` 與應用程式 UI 同步為 2.9.2。
+
+## [2.9.1] — 2026-08-04
+
+### Changed — 專案 Sheet 導覽改為可調整的桌面側邊欄
+
+- 桌面版將原本頁面頂端的水平 Sheet 分頁移至左側垂直側邊欄；低於 768px 的窄螢幕仍使用可水平捲動的分頁導覽。
+- Sheet 可透過專用拖曳把手重新排序，並支援鍵盤操作；排序結果直接寫回專案順序並隨既有專案資料持久化。
+- 桌面側邊欄可用指標或鍵盤在 160–420px 間調整寬度，也可收合為 48px；寬度與收合狀態儲存於 `tolMasterProjectSidebarUI_v1`。
+- Sheet 數量較多時側邊欄可垂直捲動；導覽 rail 維持 sticky，並移除外層 `overflow-x-clip`，避免破壞 sticky 定位。
+- 調整寬度時使用 pointer capture，並提供 20px 寬的 resize hit area，讓拖曳在游標離開把手後仍能穩定完成。
+- 版本號已在 `package.json`、`package-lock.json` 與應用程式 UI 同步為 2.9.1。
+
+#### 驗證
+
+- `npm run build`：通過。
+- Edge 對最終 `dist-single` smoke test：確認 160–420px resize bounds、收合狀態持久化、sticky rail，以及低於 768px 的水平導覽 fallback。
+- `git diff --check`：相關變更檔案通過。
+
 ## [2.9.0] — 2026-07-09
 
 ### Fixed — Solve Nominal 離散步階路徑 + 匯入/多專案穩定性（程式碼審查續批）

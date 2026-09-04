@@ -291,10 +291,16 @@ export default function SPCModal({ isOpen, onClose, item, onApply }: SPCModalPro
     const handleApply = () => {
         if (!stats) return;
 
-        // Apply nominal without inferring direction.
-        // newNominal = ProcessMean - effectiveMeanOffset
-        const effectiveMeanOffset = (item.tolPlus - item.tolMinus) / 2;
-        const newNominal = stats.mean - effectiveMeanOffset;
+        // Preserve the item's stack direction. Measurements are normally pasted as
+        // physical magnitudes (positive) even for a negative-direction item, so
+        // writing stats.mean back verbatim would silently flip that item's
+        // direction. Project the measured mean onto the existing direction, and
+        // use the same direction-aware tolerance offset as the simulation engine.
+        // newNominal = SignedProcessMean - effectiveMeanOffset
+        const dirSign = item.nominal < 0 ? -1 : 1;
+        const signedProcessMean = dirSign * Math.abs(stats.mean);
+        const effectiveMeanOffset = dirSign * (item.tolPlus - item.tolMinus) / 2;
+        const newNominal = signedProcessMean - effectiveMeanOffset;
 
         // Build empirical model if user opted in
         const empiricalModel = useEmpirical && parsedNums.length > 0 ? {

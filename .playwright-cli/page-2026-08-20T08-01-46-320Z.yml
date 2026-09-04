@@ -1,0 +1,373 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: τ
+      - generic [ref=e7]: TolMaster
+      - link "v2.9.1" [ref=e8] [cursor=pointer]:
+        - /url: https://smartmd.wnc.com.tw/post_list2?topic_id=13279
+    - generic [ref=e10]:
+      - button "說明" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+        - text: 說明
+      - button "New Project" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+        - text: New Project
+      - button "Screenshot" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+        - text: Screenshot
+      - generic [ref=e23] [cursor=pointer]:
+        - img [ref=e24]
+        - text: Load
+      - button "Save" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+        - text: Save
+  - generic [ref=e32]:
+    - complementary [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]: Sheets
+        - button "Collapse project sidebar" [expanded] [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+      - navigation "Project sheets" [ref=e39]:
+        - generic [ref=e40] [cursor=pointer]:
+          - button "Reorder project SignBug" [ref=e41]:
+            - img [ref=e42]
+          - textbox [ref=e49]: SignBug
+          - button "Duplicate Sheet" [ref=e51]:
+            - img [ref=e52]
+        - button "Add project sheet" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+      - separator "Resize project sidebar" [ref=e57]
+    - status [ref=e58]
+    - main [ref=e59]:
+      - generic [ref=e60]:
+        - button "Stack-Up Diagram" [ref=e62]:
+          - img [ref=e63]
+          - generic [ref=e67]: Stack-Up Diagram
+        - generic [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e74]: ＋ 加入公差堆疊圖 Stack-Up Diagram
+          - generic [ref=e75]: Ctrl+V 貼上、拖曳圖片，或點擊上傳
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - button "Add Dimension" [ref=e79] [cursor=pointer]:
+              - img [ref=e80]
+              - text: Add Dimension
+            - button "Fit Shift Calc" [ref=e81] [cursor=pointer]
+            - button "Invert All" [active] [ref=e82] [cursor=pointer]:
+              - img [ref=e83]
+              - text: Invert All
+            - button "Reset" [ref=e86] [cursor=pointer]:
+              - img [ref=e87]
+              - text: Reset
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - generic [ref=e94]:
+                - text: Worst Case
+                - img [ref=e96]
+              - generic [ref=e98]:
+                - text: "Max:"
+                - strong [ref=e99]: "2.325"
+              - generic [ref=e100]:
+                - text: "Min:"
+                - strong [ref=e101]: "0.825"
+              - generic [ref=e102]: ±0.75
+              - generic [ref=e103]: "|"
+              - generic [ref=e104]: "Center: 1.575"
+              - generic [ref=e105]: "|"
+              - generic [ref=e107]: "RSS: ±0.3547"
+            - generic [ref=e108]:
+              - text: "Simulations:"
+              - combobox "Simulations:" [ref=e109] [cursor=pointer]:
+                - option "100k (Fast)"
+                - option "500k (Balanced)"
+                - option "1M (Standard)" [selected]
+                - option "5M (High Precision)"
+                - option "10M (Ultra)"
+        - generic [ref=e111]:
+          - table [ref=e112]:
+            - rowgroup [ref=e113]:
+              - row "Item Name Nominal Tol + Tol − Dist CP" [ref=e114]:
+                - columnheader [ref=e115]
+                - columnheader "Item" [ref=e116]
+                - columnheader "Name" [ref=e117]
+                - columnheader "Nominal" [ref=e118]:
+                  - generic [ref=e119]:
+                    - text: Nominal
+                    - img [ref=e121]
+                - columnheader "Tol +" [ref=e123]:
+                  - generic [ref=e124]:
+                    - text: Tol +
+                    - img [ref=e126]
+                - columnheader "Tol −" [ref=e128]:
+                  - generic [ref=e129]:
+                    - text: Tol −
+                    - img [ref=e131]
+                - columnheader "Dist" [ref=e133]:
+                  - generic [ref=e134]:
+                    - text: Dist
+                    - img [ref=e136]
+                - columnheader "CP" [ref=e138]:
+                  - generic [ref=e139]:
+                    - text: CP
+                    - img [ref=e141]
+                - columnheader [ref=e143]
+            - rowgroup [ref=e144]:
+              - row "1 Brick + 13.2 0.6 0 Normal Mean Drift 1.33" [ref=e567]:
+                - cell [ref=e146]:
+                  - button [ref=e147]:
+                    - img [ref=e148]
+                - cell "1" [ref=e155]
+                - cell "Brick" [ref=e156]:
+                  - textbox "Part Name" [ref=e157]: Brick
+                - cell "+ 13.2" [ref=e568]:
+                  - generic [ref=e159]:
+                    - button "+" [ref=e569] [cursor=pointer]
+                    - textbox [ref=e161]: "13.2"
+                - cell "0.6 0" [ref=e162]:
+                  - generic [ref=e163]:
+                    - textbox [ref=e165]: "0.6"
+                    - textbox [ref=e167]: "0"
+                    - button "現在是非對稱公差。點擊鎖定為對稱公差 (±)。" [ref=e168] [cursor=pointer]:
+                      - img [ref=e169]
+                - cell "Normal Mean Drift" [ref=e172]:
+                  - generic [ref=e173]:
+                    - generic [ref=e174]:
+                      - combobox [ref=e175] [cursor=pointer]:
+                        - option "Normal" [selected]
+                        - option "Normal (Sort)"
+                        - option "Uniform"
+                      - img [ref=e177]
+                    - generic [ref=e181]:
+                      - generic [ref=e182] [cursor=pointer]: Mean Drift
+                      - img [ref=e184]
+                - cell "1.33" [ref=e187]:
+                  - generic [ref=e188]:
+                    - spinbutton [ref=e189]: "1.33"
+                    - img [ref=e191]
+                    - button "SPC Calibration - Import Real Data" [ref=e193] [cursor=pointer]:
+                      - img [ref=e194]
+                - cell [ref=e196]:
+                  - button "Delete item" [ref=e198] [cursor=pointer]:
+                    - img [ref=e199]
+              - row "2 TIM + 3.5 ± 0.35 Normal Mean Drift 1.33" [ref=e570]:
+                - cell [ref=e203]:
+                  - button [ref=e204]:
+                    - img [ref=e205]
+                - cell "2" [ref=e212]
+                - cell "TIM" [ref=e213]:
+                  - textbox "Part Name" [ref=e214]: TIM
+                - cell "+ 3.5" [ref=e571]:
+                  - generic [ref=e216]:
+                    - button "+" [ref=e572] [cursor=pointer]
+                    - textbox [ref=e218]: "3.5"
+                - cell "± 0.35" [ref=e219]:
+                  - generic [ref=e220]:
+                    - generic [ref=e221]:
+                      - generic: ±
+                      - textbox [ref=e222]: "0.35"
+                    - button "現在是對稱公差 (±)。點擊解鎖以輸入非對稱公差。" [ref=e223] [cursor=pointer]:
+                      - img [ref=e224]
+                - cell "Normal Mean Drift" [ref=e227]:
+                  - generic [ref=e228]:
+                    - generic [ref=e229]:
+                      - combobox [ref=e230] [cursor=pointer]:
+                        - option "Normal" [selected]
+                        - option "Normal (Sort)"
+                        - option "Uniform"
+                      - img [ref=e232]
+                    - generic [ref=e236]:
+                      - generic [ref=e237] [cursor=pointer]: Mean Drift
+                      - img [ref=e239]
+                - cell "1.33" [ref=e242]:
+                  - generic [ref=e243]:
+                    - spinbutton [ref=e244]: "1.33"
+                    - img [ref=e246]
+                    - button "SPC Calibration - Import Real Data" [ref=e248] [cursor=pointer]:
+                      - img [ref=e249]
+                - cell [ref=e251]:
+                  - button "Delete item" [ref=e253] [cursor=pointer]:
+                    - img [ref=e254]
+              - row "3 Height - 15.425 ± 0.1 Normal Mean Drift 1.33" [ref=e573]:
+                - cell [ref=e258]:
+                  - button [ref=e259]:
+                    - img [ref=e260]
+                - cell "3" [ref=e267]
+                - cell "Height" [ref=e268]:
+                  - textbox "Part Name" [ref=e269]: Height
+                - cell "- 15.425" [ref=e574]:
+                  - generic [ref=e271]:
+                    - button "-" [ref=e575] [cursor=pointer]
+                    - textbox [ref=e273]: "15.425"
+                - cell "± 0.1" [ref=e274]:
+                  - generic [ref=e275]:
+                    - generic [ref=e276]:
+                      - generic: ±
+                      - textbox [ref=e277]: "0.1"
+                    - button "現在是對稱公差 (±)。點擊解鎖以輸入非對稱公差。" [ref=e278] [cursor=pointer]:
+                      - img [ref=e279]
+                - cell "Normal Mean Drift" [ref=e282]:
+                  - generic [ref=e283]:
+                    - generic [ref=e284]:
+                      - combobox [ref=e285] [cursor=pointer]:
+                        - option "Normal" [selected]
+                        - option "Normal (Sort)"
+                        - option "Uniform"
+                      - img [ref=e287]
+                    - generic [ref=e291]:
+                      - generic [ref=e292] [cursor=pointer]: Mean Drift
+                      - img [ref=e294]
+                - cell "1.33" [ref=e297]:
+                  - generic [ref=e298]:
+                    - spinbutton [ref=e299]: "1.33"
+                    - img [ref=e301]
+                    - button "SPC Calibration - Import Real Data" [ref=e303] [cursor=pointer]:
+                      - img [ref=e304]
+                - cell [ref=e306]:
+                  - button "Delete item" [ref=e308] [cursor=pointer]:
+                    - img [ref=e309]
+          - status [ref=e312]
+      - generic [ref=e313]:
+        - generic [ref=e314]:
+          - generic [ref=e315]:
+            - generic [ref=e317]:
+              - generic [ref=e318]:
+                - img [ref=e320]
+                - generic [ref=e322]:
+                  - generic [ref=e323]:
+                    - text: Monte Carlo Analysis
+                    - img [ref=e325]
+                  - generic [ref=e327]: 1D LINEAR STACK · N=1,000,000 · 3 DIMENSIONS
+              - button "Run Analysis" [ref=e328] [cursor=pointer]:
+                - img [ref=e329]
+                - text: Run Analysis
+              - button "Dual-Pair Clearance" [ref=e331] [cursor=pointer]:
+                - img [ref=e332]
+                - text: Dual-Pair Clearance
+            - generic [ref=e335]:
+              - generic [ref=e336]:
+                - img [ref=e337]
+                - text: Compression Mode
+                - img [ref=e342]
+              - button [ref=e344] [cursor=pointer]
+          - generic [ref=e345]:
+            - generic [ref=e346]:
+              - heading "Specification Settings" [level=3] [ref=e347]:
+                - img [ref=e348]
+                - text: Specification Settings
+                - img [ref=e352]
+              - generic [ref=e354]:
+                - button "Manual specs" [ref=e355] [cursor=pointer]
+                - button "Target Cpk" [ref=e356] [cursor=pointer]
+            - generic [ref=e357]:
+              - generic [ref=e358]:
+                - generic [ref=e359]:
+                  - text: Lower Spec (LSL)
+                  - img [ref=e361]
+                - spinbutton "Lower Spec (LSL)" [ref=e363]: "-3"
+              - generic [ref=e364]:
+                - generic [ref=e365]:
+                  - text: Target Nominal (Optional)
+                  - img [ref=e367]
+                - spinbutton "Target Nominal (Optional)" [ref=e369]
+              - generic [ref=e370]:
+                - generic [ref=e371]:
+                  - text: Upper Spec (USL)
+                  - img [ref=e373]
+                - spinbutton "Upper Spec (USL)" [ref=e375]: "0"
+        - generic [ref=e376]:
+          - generic [ref=e388]:
+            - generic [ref=e389]:
+              - generic [ref=e392]:
+                - text: Yield rate
+                - img [ref=e394]
+              - generic [ref=e396]: 100.00000%
+              - generic [ref=e397]:
+                - generic [ref=e398]: Failure Breakdown
+                - generic [ref=e399]:
+                  - generic [ref=e400]: FitShift
+                  - generic [ref=e401]: 0.00000%
+                  - generic [ref=e402]: Upper
+                  - generic [ref=e403]: 0.00000%
+                  - generic [ref=e404]: Lower
+                  - generic [ref=e405]: 0.00000%
+            - generic [ref=e406]:
+              - generic [ref=e407]:
+                - generic [ref=e408]:
+                  - text: Defects
+                  - img [ref=e410]
+                - generic [ref=e412]: PPM
+              - generic [ref=e413]: "0"
+            - generic [ref=e414]:
+              - generic [ref=e417]:
+                - text: Equiv. Cpk
+                - img [ref=e419]
+              - generic [ref=e421]: ">1.51"
+            - generic [ref=e422]:
+              - generic [ref=e424]:
+                - text: Mean / StdDev
+                - img [ref=e426]
+              - generic [ref=e428]:
+                - generic [ref=e429]: μ
+                - generic [ref=e430]: "-1.575"
+                - generic [ref=e431]: σ
+                - generic [ref=e432]: "0.1181"
+                - generic [ref=e433]: 3σ
+                - generic [ref=e434]: "0.3544"
+            - generic [ref=e435]:
+              - generic [ref=e437]:
+                - text: Simulated Range
+                - img [ref=e439]
+              - generic [ref=e441]:
+                - generic [ref=e442]: Max
+                - generic [ref=e443]: "-0.959"
+                - generic [ref=e444]: Min
+                - generic [ref=e445]: "-2.114"
+          - generic [ref=e446]:
+            - generic [ref=e447]:
+              - generic [ref=e449]:
+                - text: Distribution
+                - img [ref=e451]
+              - img [ref=e454]:
+                - generic [ref=e458]: "0.0"
+                - generic [ref=e460]: "19397"
+                - generic [ref=e462]: "38794"
+                - generic [ref=e464]: "58190"
+                - generic [ref=e466]: "77587"
+                - generic [ref=e468]: "-3.00"
+                - generic [ref=e470]: "-2.25"
+                - generic [ref=e472]: "-1.50"
+                - generic [ref=e474]: "-0.75"
+                - generic [ref=e476]: "0.00"
+                - generic [ref=e526]: MU
+                - generic [ref=e528]: LSL
+                - generic [ref=e530]: USL
+                - generic [ref=e531]: DIMENSION
+            - generic [ref=e532]:
+              - generic [ref=e534]:
+                - generic [ref=e535]:
+                  - text: Contribution Analysis
+                  - img [ref=e537]
+                - generic [ref=e539]: Variance share, σ²
+              - img [ref=e541]:
+                - generic [ref=e542]: "0"
+                - generic [ref=e543]: "25"
+                - generic [ref=e544]: "50"
+                - generic [ref=e545]: "75"
+                - generic [ref=e546]: 100%
+                - generic [ref=e547]:
+                  - generic "TIM" [ref=e548]
+                  - generic [ref=e551]: 55.1%
+                - generic [ref=e552]:
+                  - generic "Brick" [ref=e553]
+                  - generic [ref=e556]: 40.5%
+                - generic [ref=e557]:
+                  - generic "Height" [ref=e558]
+                  - generic [ref=e561]: 4.5%
+  - contentinfo [ref=e381]:
+    - button "TolMaster v2.9.1" [ref=e382]
+    - generic [ref=e384]: Engine · Monte Carlo
+    - generic [ref=e562]: N=1,000,000
+    - generic [ref=e564]: μ=-1.5751
+    - generic [ref=e566]: σ=0.1181
+    - generic [ref=e387]: "@HPY"

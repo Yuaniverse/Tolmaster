@@ -283,9 +283,24 @@ export function HorizontalBarChart({
 
   // Coordinate system mirrors refined.html exactly
   const vw = 600;
-  const plotLeft = 128;
   const plotRight = 548;
-  const plotWidth = plotRight - plotLeft; // 420
+
+  // Label gutter grows with the longest name (JetBrains Mono advance ≈ 0.6 em),
+  // then names that still overflow are middle-truncated so they never run off
+  // the left edge or collide with the bars.
+  const labelFontSize = 11;
+  const charWidth = labelFontSize * 0.6;
+  const labelPad = 10;
+  const longestName = data.reduce((acc, d) => Math.max(acc, d.name.length), 0);
+  const plotLeft = clamp(Math.ceil(longestName * charWidth) + labelPad + 4, 128, 236);
+  const plotWidth = plotRight - plotLeft;
+  const maxLabelChars = Math.max(6, Math.floor((plotLeft - labelPad - 4) / charWidth));
+  const truncateLabel = (name: string) => {
+    if (name.length <= maxLabelChars) return name;
+    const head = Math.ceil((maxLabelChars - 1) / 2);
+    const tail = maxLabelChars - 1 - head;
+    return `${name.slice(0, head)}…${tail > 0 ? name.slice(name.length - tail) : ''}`;
+  };
 
   const barH = 24;
   const barGap = 34;
@@ -328,14 +343,15 @@ export function HorizontalBarChart({
           <g key={item.name}>
             {/* Row label — var(--ink-2) */}
             <text
-              x={plotLeft - 10}
+              x={plotLeft - labelPad}
               y={y + barH / 2 + 4}
               textAnchor="end"
               fontFamily="JetBrains Mono, monospace"
-              fontSize="11"
+              fontSize={labelFontSize}
               fill="var(--ink-2)"
             >
-              {item.name}
+              <title>{item.name}</title>
+              {truncateLabel(item.name)}
             </text>
 
             {/* Background track */}
